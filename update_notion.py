@@ -1,5 +1,10 @@
 """
-report.md와 YOLO 학습 결과(results.csv)를 읽어 Notion 페이지를 자동 업데이트합니다.
+report.md와 YOLO 학습·EDA 결과를 읽어 Notion 페이지를 자동 업데이트합니다.
+
+파이프라인 (기본):
+  1. eda.py (runs/eda 없을 때 자동 실행)
+  2. update_report.py (report.md에 EDA·학습 결과 반영)
+  3. Notion 페이지 전체 교체 + 로컬 이미지 업로드 (EDA·학습 그래프 포함)
 
 환경 변수:
   NOTION_TOKEN   - Notion Integration API 토큰 (필수)
@@ -18,6 +23,7 @@ import csv
 import mimetypes
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -32,8 +38,10 @@ BLOCK_CHUNK_SIZE = 100
 NOTION_API_VERSION = "2022-06-28"
 NOTION_FILE_UPLOAD_VERSION = "2025-09-03"
 ROOT = Path(__file__).resolve().parent
+DEFAULT_EDA_DIR = ROOT / "runs" / "eda"
 IMAGE_MD_PATTERN = re.compile(r"^!\[(.*?)\]\((.+?)\)\s*$")
 HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
+BULLET_LINE_PATTERN = re.compile(r"^(\s*)[-*]\s+(.*)$")
 
 
 @dataclass(frozen=True)
@@ -69,6 +77,16 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Notion API 호출 없이 파싱 결과만 확인",
+    )
+    parser.add_argument(
+        "--skip-eda",
+        action="store_true",
+        help="EDA 생성·report 갱신 단계 건너뛰기",
+    )
+    parser.add_argument(
+        "--skip-report-sync",
+        action="store_true",
+        help="update_report.py 동기화 건너뛰기 (report.md 원문만 업로드)",
     )
     return parser.parse_args()
 
@@ -304,7 +322,7 @@ def _parse_table_rows(lines: list[str]) -> dict | None:
     normalized = [row + [""] * (table_width - len(row)) for row in rows]
     table_rows = []
     for row in normalized:
-        cells = [[{"type": "text", "text": {"content": cell}}] for cell in row]
+        cells = [parse_inline_rich_text(cell) for cell in row]
         table_rows.append(
             {
                 "object": "block",
@@ -323,6 +341,56 @@ def _parse_table_rows(lines: list[str]) -> dict | None:
             "children": table_rows,
         },
     }
+
+
+def _is_bullet_line(line: str) -> bool:
+    return bool(BULLET_LINE_PATTERN.match(line))
+
+
+def _nest_bullet_blocks(items: list[tuple[int, str]]) -> list[dict]:
+    """
+    (들여쓰기 수준, 텍스트) 목록을 Notion 중첩 bulleted_list_item 블록으로 변환합니다.
+
+    report.md 예:
+      - EXP 1: ...
+        - **내용:** ...
+        - **결과:** ...
+    """
+    roots: list[dict] = []
+    stack: list[tuple[int, dict]] = []
+
+    for indent, text in items:
+        block: dict = {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": parse_inline_rich_text(text),
+                "children": [],
+            },
+        }
+
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+
+        if stack:
+            stack[-1][1]["bulleted_list_item"]["children"].append(block)
+        else:
+            roots.append(block)
+
+        stack.append((indent, block))
+
+    def _strip_empty_children(node: dict) -> None:
+        children = node["bulleted_list_item"].get("children", [])
+        if not children:
+            node["bulleted_list_item"].pop("children", None)
+        else:
+            for child in children:
+                _strip_empty_children(child)
+
+    for root in roots:
+        _strip_empty_children(root)
+
+    return roots
 
 
 def markdown_to_notion_blocks(markdown: str) -> list[dict]:
@@ -376,9 +444,14 @@ def markdown_to_notion_blocks(markdown: str) -> list[dict]:
                 blocks.append(table_block)
             continue
 
-        if stripped.startswith(("- ", "* ")):
-            blocks.append(_block("bulleted_list_item", parse_inline_rich_text(stripped[2:].strip())))
-            i += 1
+        if _is_bullet_line(line):
+            items: list[tuple[int, str]] = []
+            while i < len(lines) and _is_bullet_line(lines[i]):
+                match = BULLET_LINE_PATTERN.match(lines[i])
+                assert match is not None
+                items.append((len(match.group(1)), match.group(2).strip()))
+                i += 1
+            blocks.extend(_nest_bullet_blocks(items))
             continue
 
         image_match = IMAGE_MD_PATTERN.match(stripped)
@@ -398,7 +471,7 @@ def markdown_to_notion_blocks(markdown: str) -> list[dict]:
                 or nxt == "---"
                 or nxt.startswith(">")
                 or nxt.startswith("|")
-                or nxt.startswith(("- ", "* "))
+                or _is_bullet_line(lines[i])
             ):
                 break
             paragraph_lines.append(nxt)
@@ -453,18 +526,61 @@ def build_report_content(report_path: Path, runs_dir: Path) -> tuple[str, YoloMe
     return content, metrics
 
 
+def run_eda_if_needed() -> None:
+    """runs/eda/ 산출물이 없으면 eda.py를 실행합니다."""
+    summary = DEFAULT_EDA_DIR / "eda_summary.yaml"
+    if summary.exists():
+        print(f"EDA 산출물 확인: {summary}")
+        return
+    print("EDA 산출물 없음 — eda.py 실행 중...")
+    subprocess.run([sys.executable, str(ROOT / "eda.py")], check=True, cwd=ROOT)
+
+
+def sync_report_md() -> None:
+    """report.md에 학습·EDA 결과를 반영합니다 (update_report.py 호출)."""
+    print("report.md 동기화 중 (update_report.py)...")
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "update_report.py")],
+        cwd=ROOT,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(
+            "[경고] update_report.py 실패 — report.md 원문만 Notion에 업로드합니다.",
+            file=sys.stderr,
+        )
+
+
 def main() -> None:
-    load_dotenv()
+    env_path = ROOT / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        load_dotenv()
     args = parse_args()
 
     token = os.getenv("NOTION_TOKEN")
     page_id_raw = args.page_id or os.getenv("NOTION_PAGE_ID")
     if not token:
-        raise SystemExit("NOTION_TOKEN 환경 변수를 설정해 주세요.")
+        raise SystemExit(
+            "NOTION_TOKEN 환경 변수를 설정해 주세요.\n"
+            f"  → 프로젝트 루트에 `.env` 파일을 만드세요 (`.env.example`을 복사).\n"
+            f"  → 현재 `.env` 존재 여부: {env_path.exists()}\n"
+            "  → 참고: `.env.example`에만 입력하면 읽히지 않습니다."
+        )
     if not page_id_raw:
         raise SystemExit("NOTION_PAGE_ID 환경 변수 또는 --page-id 옵션을 설정해 주세요.")
     if not args.report.exists():
         raise SystemExit(f"리포트 파일을 찾을 수 없습니다: {args.report}")
+
+    if not args.skip_eda:
+        try:
+            run_eda_if_needed()
+        except subprocess.CalledProcessError as exc:
+            print(f"[경고] eda.py 실행 실패: {exc}", file=sys.stderr)
+
+    if not args.skip_report_sync:
+        sync_report_md()
 
     page_id = format_page_id(page_id_raw)
     content, metrics = build_report_content(args.report, args.runs_dir)
@@ -493,7 +609,10 @@ def main() -> None:
 
     if args.dry_run:
         pending = sum(1 for b in blocks if "_pending_image" in b)
-        print(f"이미지 블록(업로드 예정): {pending}개")
+        eda_images = sum(
+            1 for b in blocks if "_pending_image" in b and "runs/eda" in b.get("_pending_image", "")
+        )
+        print(f"이미지 블록(업로드 예정): {pending}개 (EDA: {eda_images}개)")
         print("dry-run 모드 — Notion API를 호출하지 않았습니다.")
         return
 

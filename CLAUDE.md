@@ -2,73 +2,224 @@
 
 > **[필독] 에이전트 구동 지침**
 >
-> 1. 본 프로젝트는 '풍력 발전기 파손 탐지 YOLO AI'와 이를 서비스하는 'B2B 웹 프로덕트'를 통합 구축합니다.
-> 2. **AI/ML 작업:** Apple M1 Pro(`device='mps'`)를 활용하며, 코드 수정 후 반드시 1 Epoch 테스트로 검증하십시오.
-> 3. **UI/UX 작업:** 모든 프론트엔드 작업은 루트 디렉토리의 `DESIGN.md` 문서를 절대적인 기준으로 삼아 디자인 토큰, 색상(LogPick Navy/Teal), 폰트(Pretendard)를 엄격히 적용하십시오.
+> 1. 본 프로젝트는 **풍력 터빈 블레이드 Dirt/Damage 객체 탐지(YOLO11)** 와 이를 서비스하는 **B2B 웹 프로덕트**를 통합 구축합니다.
+> 2. **AI/ML 작업:** Apple M1 Pro(`device='mps'`)를 활용하며, 코드 수정 후 반드시 **1 Epoch 테스트**(`python train.py --test`)로 검증하십시오.
+> 3. **설정 하드코딩 금지:** 모델·하이퍼파라미터·증강은 `configs/*.yaml`, 데이터 경로는 `data/data.yaml`에서 관리합니다.
+> 4. **UI/UX 작업:** 프론트엔드 착수 시 루트의 `DESIGN.md`를 기준으로 LogPick Navy/Teal, Pretendard를 적용하십시오. *(현재 `DESIGN.md` 미작성 — Phase 3 착수 전 생성 필요)*
 
 ---
 
-## 1. 파이프라인 및 테스트 명령어 (Commands)
+## 0. 프로젝트 현황 (2026-07 기준)
 
-에이전트는 각 파트의 코드를 수정한 후 반드시 아래의 검증(Test) 명령어를 실행하십시오.
+### Phase 진행 상태
 
-### ① AI 머신러닝 파이프라인 (YOLOv11)
+| Phase | 내용 | 상태 |
+| :--- | :--- | :---: |
+| **Phase 1** | 데이터 분할 · EDA · 학습 · 검증 · 리포트 | 🟢 **대부분 완료** |
+| **Phase 1 Test** | `predict.py` 단일 이미지 추론 | ⬜ **다음 작업** |
+| **Phase 2** | FastAPI 백엔드 (`backend/`) | ⬜ 미착수 |
+| **Phase 3** | Next.js 프론트 (`frontend-user/`) | ⬜ 미착수 |
 
-- **데이터 전처리:** `python split_data.py` (8:2 Train/Val 분할 및 라벨 매칭 검증)
-- **모델 학습:** `python train.py` (mps 가속 및 Augmentation 적용 상태 확인)
-- **결과 검증:** `runs/detect/train/` 폴더 내 결과물 확인 및 노션 자동화 리포트(`update_notion.py`) 업데이트.
+### 학습 결과 (Validation 기준)
 
-### ② 백엔드 (Backend - FastAPI)
+| 구분 | 모델 | mAP50 | mAP50-95 | 가중치 |
+| :--- | :--- | ---: | ---: | :--- |
+| **Baseline** | YOLO11n (Nano) | 0.538 | 0.317 | `runs/detect/baseline/weights/best.pt` |
+| **최종 모델** | YOLO11s (Small) | 0.575 | 0.319 | `runs/detect/train/weights/best.pt` |
+| **재검증** | YOLO11s | 0.574 | 0.318 | `runs/detect/val_final/` |
 
-- **역할:** 학습된 YOLO 가중치(`best.pt`)를 로드하여 프론트엔드에서 보낸 이미지를 분석하고 JSON(BBox 좌표, 클래스)으로 반환.
-- **실행 명령어:** `uvicorn backend.main:app --reload`
-- **검증:** Postman 또는 Swagger UI(`http://localhost:8000/docs`)를 통한 이미지 업로드 테스트.
-
-### ③ 프론트엔드 (Frontend - Next.js)
-
-- **역할:** `DESIGN.md`를 준수한 사용자 웹(데모 시연용) 구축.
-- **실행 명령어:** `npm install` 후 `npm run dev`
-- **검증:** API 서버 통신 상태 및 반응형(Responsive) 레이아웃 렌더링 확인.
-
-### ④ 중간 결과 시각화 및 로깅 (Visualization & Logging)
-
-- **중간 산출물 보존:** 학습 및 검증 과정에서 도출되는 모든 시각적 결과물(Loss/mAP 그래프, 오차 행렬, BBox 예측 예시 이미지 등)은 해커톤 발표 자료의 핵심 근거입니다.
-- **에이전트 역할 (보고서 자동화):**
-  1. 새로운 실험(1개 Epoch 세트 완료 또는 파라미터 튜닝)이 끝날 때마다 `runs/detect/` 최신 폴더를 스캔하십시오.
-  2. 스캔한 주요 이미지(`results.png`, `val_batch0_pred.jpg` 등)를 `report.md` 문서의 해당 실험 항목에 마크다운 이미지 링크(`![설명](상대경로)`) 형태로 즉각 삽입하십시오.
-  3. 사용자가 텍스트뿐만 아니라 시각적인 그래프와 예측 이미지를 통해 모델의 개선 과정을 한눈에 추적할 수 있도록 문서를 구성해야 합니다.
+- **데이터:** Train/Val **8:2** 분할 (독립 Test 세트 없음 → Val 기준 평가)
+- **클래스:** `dirt`(0), `damage`(1)
+- **EDA:** Damage BBox 93%가 극소형(w,h < 0.2) — `runs/eda/` 참조
 
 ---
 
-## 2. 프론트엔드 UI/UX 설계 원칙 (Based on DESIGN.md)
+## 1. 프로젝트 구조
 
-커서 AI는 컴포넌트 생성 시 다음 규칙을 강제합니다.
-
-1. **디자인 테마:** LogPick Core의 '차분하고 밀도 있는 B2B SaaS' 무드를 유지합니다. 과도한 그라데이션, 화려한 장식은 배제합니다.
-2. **컬러 앤 타이포그래피:**
-   - **Primary Color:** LogPick Teal (`#0D9488`), 배경/헤더: LogPick Navy (`#1E3A5F`)
-   - **폰트:** 1순위 `Pretendard` 적용.
-3. **컴포넌트 설계:**
-   - Tailwind CSS를 활용하며, `DESIGN.md` §4에 명시된 버튼(Primary, Secondary 등) 및 카드(`rounded-xl`) 규격을 준수합니다.
-   - 데모 화면은 좌측 '원본 이미지 업로드', 우측 'YOLO 탐지 결과 및 수치 표기'의 2단 레이아웃을 기본으로 합니다.
+```
+wind-turbine-yolo/
+├── split_data.py          # Train/Val 8:2 분할 (배경 이미지·고아 라벨 처리)
+├── eda.py                 # YOLO 라벨 EDA · 시각화
+├── train.py               # YOLO11 본학습
+├── val.py                 # best.pt Val 재검증
+├── update_report.py       # report.md 자동 갱신
+├── update_notion.py       # Notion 페이지 동기화 + 이미지 업로드
+├── report.md              # 해커톤 루브릭 리포트 (자동 마커 포함)
+├── TRAINING_CHECKLIST.md  # 학습 준비·추가 개발 체크리스트
+├── configs/
+│   ├── train.yaml         # 본학습 (YOLO11s, 50 epoch, batch 8)
+│   ├── train_baseline.yaml # Baseline (YOLO11n, 20 epoch)
+│   └── val.yaml           # Val 재검증 (val_final)
+├── data/
+│   ├── data.yaml          # 데이터셋 경로·클래스
+│   ├── images/{train,val}
+│   └── labels/{train,val}
+├── runs/
+│   ├── detect/            # YOLO 학습·검증 산출물
+│   └── eda/               # EDA 그래프·eda_summary.yaml
+├── .env                   # NOTION_TOKEN 등 (Git 제외) ← 실제 비밀값
+└── .env.example           # 환경 변수 예시 (토큰 넣지 말 것)
+```
 
 ---
 
-## 3. 핵심 코딩 스타일 가이드라인 (Coding Rules)
+## 2. 파이프라인 및 명령어 (Commands)
 
-### ① 도메인 맞춤형 AI 로직
+### ① AI 머신러닝 파이프라인 (YOLO11) — 권장 실행 순서
 
-- 풍력 발전기 도메인 특성상 상하 반전(`flipud`)은 절대 금지(`0.0`)하며, 팀에서 지정한 최적의 하이퍼파라미터만 사용합니다.
-- 모든 환경 변수(포트 번호, 모델 경로, API 토큰)는 `.env` 파일로 분리합니다.
+```bash
+# 0. 의존성 (최초 1회)
+pip3 install -r requirements.txt
 
-### ② 에러 핸들링
+# 1. 데이터 분할 (최초 1회 — 파일 이동 주의)
+python3 split_data.py
 
-- **AI:** `OOM` 발생 시 배치 사이즈 축소. 경로 에러 시 `data.yaml` 점검.
-- **Web:** 백엔드/프론트엔드 간 CORS 에러 방지 처리 및 API 타임아웃 예외 처리 필수. 에러 발생 시 전체 코드를 갈아엎지 않고 해당 로직만 핀포인트로 디버깅합니다.
+# 2. EDA (학습 전·후 모두 가능)
+python3 eda.py                    # runs/eda/ 생성 + report.md EDA 섹션 갱신
+
+# 3. 본학습
+python3 train.py                  # configs/train.yaml
+python3 train.py --test           # 1 Epoch 파이프라인 스모크 테스트
+
+# 4. Baseline (비교군)
+python3 train.py --config configs/train_baseline.yaml --no-report
+
+# 5. Val 재검증
+python3 val.py                    # runs/detect/val_final/
+
+# 6. 리포트·Notion 반영
+python3 update_report.py
+python3 update_notion.py          # .env 필수 (아래 §5 참조)
+```
+
+**한 번에 Notion까지:** `python3 update_notion.py`  
+→ EDA 없으면 자동 생성 → `update_report.py` → Notion 업로드(로컬 이미지 File Upload API)
+
+### ② Phase 1 Test — 추론 (미구현 · 다음 작업)
+
+- **목표:** `predict.py` — `best.pt`로 단일 이미지 BBox 추론 · 결과 이미지/JSON 저장
+- **OSS:** Ultralytics YOLO + OpenCV (`references.md` S2)
+
+### ③ 백엔드 (Backend - FastAPI) — 미착수
+
+- **역할:** `best.pt` 로드 → 이미지 업로드 → BBox·클래스 JSON 반환
+- **실행:** `uvicorn backend.main:app --reload`
+- **검증:** Swagger UI `http://localhost:8000/docs`
+
+### ④ 프론트엔드 (Frontend - Next.js) — 미착수
+
+- **역할:** LogPick 테마 B2B 데모 UI (좌: 업로드 / 우: 탐지 결과·카운트)
+- **실행:** `npm install` → `npm run dev`
 
 ---
 
-## 4. Git 커밋·푸시 규칙 (Version Control)
+## 3. 핵심 설정 규칙
 
-- **[커밋 제외 `.gitignore`]** 데이터셋(`data/`), 모델 가중치(`*.pt`), 환경변수(`.env`), `node_modules/`
-- **[커밋 타이밍]** 각 기능 단위 완료 시 (예: `feat(backend): YOLOv11 추론 엔드포인트 구현`, `design(frontend): 탐지 결과 카드 UI 적용`)
+### 도메인 맞춤형 AI (`configs/train.yaml`)
+
+| 항목 | 값 | 이유 |
+| :--- | :--- | :--- |
+| `device` | `mps` | Apple M1 GPU |
+| `flipud` | `0.0` | 풍력 터빈 블레이드 상하 반전 **절대 금지** |
+| `batch` | `8` | M1 16GB RAM — 32는 스왑 유발 |
+| `workers` | `0` | Mac+MPS 메모리 부담 감소 |
+| `patience` | `10` | Early stopping |
+| `epochs` | `50` (본학습) / `20` (Baseline) | |
+
+- **OOM 대응:** `train.py` · `val.py` — batch 8→4→2 자동 재시도
+- **project 경로:** 스크립트가 프로젝트 루트 기준 **절대 경로**로 고정 (`runs/detect/`)
+
+### 평가 지표
+
+- **사용:** mAP50, mAP50-95, Precision, Recall, F1 곡선, Confusion Matrix
+- **한계:** Hold-out Test 없음 — 발표 시 **"Validation 기준"** 명시
+- **알려진 이슈:** Damage→Background FN 다수 (혼동행렬 참조)
+
+---
+
+## 4. 리포트·Notion 자동화
+
+### `report.md` 자동 갱신 마커
+
+| 마커 | 내용 |
+| :--- | :--- |
+| `report:auto:eda` | EDA 클래스 분포·인사이트·그래프 |
+| `report:auto:run-summary` | 최종 학습·재검증 요약 |
+| `report:auto:exp-comparison` | Baseline / EXP 비교 표 |
+| `report:auto:metrics-visuals` | Loss/mAP · Confusion Matrix · F1 |
+| `report:auto:predictions` | Val 예측 BBox 이미지 |
+
+- **`update_report.py`:** `runs/detect/` + `runs/eda/` 스캔 → `report.md` 갱신
+- **`update_notion.py`:** `report.md` → Notion 블록 변환 + **로컬 이미지 업로드**
+- **`eda.py`:** 완료 시 `update_report.py` 자동 호출
+
+### Notion 환경 설정 (필수)
+
+```bash
+cp .env.example .env
+# .env 파일에만 토큰 입력 ( .env.example 에 넣지 말 것 )
+```
+
+```
+NOTION_TOKEN=ntn_...
+NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
+```
+
+- Notion 페이지 → `···` → **연결** → Integration 추가 필수
+- 스크립트는 **`.env`만** 읽음 (`.env.example`은 무시)
+
+---
+
+## 5. 중간 산출물 보존 (Visualization & Logging)
+
+학습·검증·EDA 과정의 시각적 결과물은 **발표 핵심 근거**입니다. 삭제하지 마십시오.
+
+| 경로 | 내용 |
+| :--- | :--- |
+| `runs/detect/train/` | `results.csv`, `results.png`, `weights/best.pt` |
+| `runs/detect/baseline/` | Baseline 학습 결과 |
+| `runs/detect/val_final/` | 재검증 메트릭·혼동행렬·예측 이미지 |
+| `runs/eda/` | 클래스 분포·BBox 크기 EDA 그래프 |
+
+**에이전트 역할:** 실험 완료 시 `update_report.py` → (선택) `update_notion.py` 실행.
+
+---
+
+## 6. 프론트엔드 UI/UX (Phase 3 — Based on DESIGN.md)
+
+`DESIGN.md` 작성 후 아래 규칙을 적용합니다.
+
+1. **테마:** LogPick B2B SaaS — 차분·고밀도, 과도한 장식 배제
+2. **컬러:** Primary Teal `#0D9488`, Navy `#1E3A5F` / 폰트: `Pretendard`
+3. **레이아웃:** 좌측 원본 업로드 · 우측 YOLO 탐지 결과·객체 수
+
+---
+
+## 7. 코딩 스타일 · 에러 핸들링
+
+- **YAML 분리:** 학습 설정을 Python에 하드코딩하지 않음
+- **AI OOM:** batch 축소 → `data.yaml` 경로 점검
+- **Web (Phase 2~3):** CORS·API 타임아웃 처리, 핀포인트 디버깅
+- **비밀값:** API 토큰·포트는 `.env` only (Git 커밋 금지)
+
+---
+
+## 8. Git 규칙
+
+**`.gitignore` 대상:** `data/`, `*.pt`, `.env`, `node_modules/`, `runs/` (선택)
+
+**커밋 예시:**
+- `feat(ml): eda.py EDA 시각화 추가`
+- `feat(backend): YOLO11 추론 엔드포인트 구현`
+- `docs: report.md Baseline 비교 반영`
+
+---
+
+## 9. 참조 문서
+
+| 문서 | 용도 |
+| :--- | :--- |
+| `references.md` | OSS 스택 · Phase 매핑 |
+| `report.md` | 해커톤 루브릭 리포트 |
+| `TRAINING_CHECKLIST.md` | 학습 준비·추가 개발 체크리스트 |
+| `.cursorrules` | YOLO + M1 mps 규칙 |
