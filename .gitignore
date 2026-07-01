@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+runs/
+data/*
+!data/data.yaml
+*.pt
+node_modules/
+.DS_Store
