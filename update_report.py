@@ -16,6 +16,7 @@ import argparse
 import csv
 import json
 import re
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,7 +38,7 @@ SPLIT_END = "<!-- /report:auto:split -->"
 METRICS_START = "<!-- report:auto:metrics-visuals -->"
 METRICS_END = "<!-- /report:auto:metrics-visuals -->"
 PREDICTIONS_START = "<!-- report:auto:predictions -->"
-PREDICTIONS_END = "<!-- report:auto:predictions -->"
+PREDICTIONS_END = "<!-- /report:auto:predictions -->"
 PREDICT_INFERENCE_START = "<!-- report:auto:predict-inference -->"
 PREDICT_INFERENCE_END = "<!-- /report:auto:predict-inference -->"
 RUN_SUMMARY_START = "<!-- report:auto:run-summary -->"
@@ -53,6 +54,7 @@ EDA_END = "<!-- /report:auto:eda -->"
 
 DEFAULT_EDA_DIR = ROOT / "runs" / "eda"
 DEFAULT_PREDICT_DIR = ROOT / "runs" / "predict"
+REPORT_ASSETS_DIR = ROOT / "report" / "assets"
 
 FINAL_MODEL_ROW_PATTERN = re.compile(
     r"^\|\s*\*\*최종 모델\*\*\s*\|.*\|$",
@@ -318,7 +320,7 @@ def update_predict_inference_section(
         )
         sample_files.append((filename, f"predict 추론 결과 {i} — {src} ({det_count} BBox)"))
 
-    sample_images = build_image_lines(run_dir, sample_files)
+    sample_images = build_image_lines(run_dir, sample_files, "predict")
     if sample_images:
         lines.extend(["", "**대표 추론 결과 (탐지 있음)**", ""])
         lines.extend(sample_images)
@@ -333,12 +335,25 @@ def to_repo_relative(path: Path) -> str:
     return path.resolve().relative_to(ROOT).as_posix()
 
 
-def build_image_lines(run_dir: Path, files: list[tuple[str, str]]) -> list[str]:
+def publish_report_asset(source: Path, asset_rel: str) -> str:
+    """runs/ 산출물을 GitHub 공개용 report/assets/ 로 복사하고 상대 경로를 반환."""
+    dest = REPORT_ASSETS_DIR / asset_rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest)
+    return to_repo_relative(dest)
+
+
+def build_image_lines(
+    run_dir: Path,
+    files: list[tuple[str, str]],
+    asset_namespace: str,
+) -> list[str]:
     lines: list[str] = []
     for filename, caption in files:
         image_path = run_dir / filename
         if image_path.exists():
-            lines.append(f"![{caption}]({to_repo_relative(image_path)})")
+            rel = publish_report_asset(image_path, f"{asset_namespace}/{filename}")
+            lines.append(f"![{caption}]({rel})")
     return lines
 
 
@@ -707,6 +722,7 @@ def update_eda_section(content: str, eda_dir: Path, updated_at: str) -> str:
             ("bbox_size_distribution.png", "Bounding Box Size Distribution (Normalized)"),
             ("bbox_area_distribution.png", "Bounding Box Area Distribution"),
         ],
+        "eda",
     )
     if eda_images:
         lines.append("")
@@ -738,6 +754,7 @@ def update_visual_sections(
         metrics_images += build_image_lines(
             train_dir,
             [("results.png", "Loss/mAP 학습 곡선 (Train)")],
+            "metrics",
         )
     if val_dir:
         metrics_images += build_image_lines(
@@ -746,6 +763,7 @@ def update_visual_sections(
                 ("confusion_matrix.png", "Confusion Matrix (Val)"),
                 ("BoxF1_curve.png", "Box F1 Curve (Val)"),
             ],
+            "metrics",
         )
 
     if metrics_images:
@@ -771,6 +789,7 @@ def update_visual_sections(
                 ("val_batch1_pred.jpg", "검증 예측 결과 2"),
                 ("val_batch2_pred.jpg", "검증 예측 결과 3"),
             ],
+            "val",
         )
         if preds:
             body = f"- **Dirt / Damage 탐지 결과** — `{val_dir.name}`\n\n" + "\n\n".join(preds)

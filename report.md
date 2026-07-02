@@ -9,7 +9,7 @@
 ### Train / Val 분할 결과
 
 <!-- report:auto:split -->
-- **자동 반영:** 2026-07-02 09:14:47 (`folder_scan`)
+- **자동 반영:** 2026-07-02 10:09:34 (`folder_scan`)
 
 | 항목 | 이미지 수 | 비율 |
 | :--------------- | ----------: | ----: |
@@ -52,7 +52,7 @@
 > 학습 전 데이터 특성 파악 — `python eda.py` 실행 후 `update_report.py` / `update_notion.py`로 자동 반영
 
 <!-- report:auto:eda -->
-- **자동 반영:** 2026-07-02 09:14:47
+- **자동 반영:** 2026-07-02 10:09:34
 - **총 BBox:** 9351개
 
 **클래스별 BBox 분포**
@@ -70,9 +70,9 @@
 
 **시각화**
 
-![Class Distribution: Dirt vs Damage](runs/eda/class_distribution.png)
-![Bounding Box Size Distribution (Normalized)](runs/eda/bbox_size_distribution.png)
-![Bounding Box Area Distribution](runs/eda/bbox_area_distribution.png)
+![Class Distribution: Dirt vs Damage](report/assets/eda/class_distribution.png)
+![Bounding Box Size Distribution (Normalized)](report/assets/eda/bbox_size_distribution.png)
+![Bounding Box Area Distribution](report/assets/eda/bbox_area_distribution.png)
 <!-- /report:auto:eda -->
 
 ---
@@ -95,7 +95,7 @@
 - **최종 학습:** `train` | mAP50 **0.575** | mAP50-95 **0.319**
 - **재검증:** `val_final`
 - **Val 메트릭:** mAP50 **0.574** | Precision **0.597** | Recall **0.640**
-- **갱신 시각:** 2026-07-02 09:14:47
+- **갱신 시각:** 2026-07-02 10:09:34
 <!-- /report:auto:run-summary -->
 
 - **Baseline 한계:** 작은 크기의 Damage(손상) 객체를 배경과 혼동하여 놓치는(False Negative) 현상이 잦았음.
@@ -172,20 +172,20 @@
 - **정책 요약:** Early stopping + 도메인 증강 + Ultralytics 기본 weight decay(L2)로 **일반화를 확보**했습니다. YOLO 객체 탐지에서는 Dropout/L1 별도 설계가 표준이 아니며, mAP 추가 이득도 제한적입니다.
 - **학습 곡선:** Val Loss가 Train Loss와 함께 안정적으로 수렴 — **심각한 과적합 징후는 관찰되지 않음** (`runs/detect/train/results.png`).
 <!-- report:auto:metrics-visuals -->
-- **자동 반영:** 2026-07-02 09:14:47
+- **자동 반영:** 2026-07-02 10:09:34
 - **Val 재검증 (`val_final`):** mAP50 **0.574** | mAP50-95 **0.318** | Precision **0.597** | Recall **0.640**
 
-![Loss/mAP 학습 곡선 (Train)](runs/detect/train/results.png)
+![Loss/mAP 학습 곡선 (Train)](report/assets/metrics/results.png)
 
-![Confusion Matrix (Val)](runs/detect/val_final/confusion_matrix.png)
+![Confusion Matrix (Val)](report/assets/metrics/confusion_matrix.png)
 
-![Box F1 Curve (Val)](runs/detect/val_final/BoxF1_curve.png)
+![Box F1 Curve (Val)](report/assets/metrics/BoxF1_curve.png)
 <!-- /report:auto:metrics-visuals -->
 
 ### 오탐·미탐 및 오류 패턴 분석
 
 <!-- report:auto:error-analysis -->
-- **자동 반영:** 2026-07-02 09:14:47 (`val_final` + `predict.py`)
+- **자동 반영:** 2026-07-02 10:09:34 (`val_final` + `predict.py`)
 
 **클래스별 Val 지표**
 
@@ -242,9 +242,9 @@
 
 **대표 추론 결과 (탐지 있음)**
 
-![predict 추론 결과 1 — DJI_0121_07_05.png (16 BBox)](runs/predict/val_batch/DJI_0121_07_05.jpg)
-![predict 추론 결과 2 — DJI_0374_02_07.png (16 BBox)](runs/predict/val_batch/DJI_0374_02_07.jpg)
-![predict 추론 결과 3 — DJI_0033_03_04.png (15 BBox)](runs/predict/val_batch/DJI_0033_03_04.jpg)
+![predict 추론 결과 1 — DJI_0121_07_05.png (16 BBox)](report/assets/predict/DJI_0121_07_05.jpg)
+![predict 추론 결과 2 — DJI_0374_02_07.png (16 BBox)](report/assets/predict/DJI_0374_02_07.jpg)
+![predict 추론 결과 3 — DJI_0033_03_04.png (15 BBox)](report/assets/predict/DJI_0033_03_04.jpg)
 
 - **전체 결과:** `runs/predict/val_batch/predictions.json` · `runs/predict/val_batch/`
 <!-- /report:auto:predict-inference -->
@@ -252,15 +252,13 @@
 ### 탐지 결과 시각화 (val.py 검증)
 
 <!-- report:auto:predictions -->
+- **Dirt / Damage 탐지 결과** — `val_final`
 
-- **Dirt(오염) 및 Damage(손상) 탐지 결과** — `val_final`
+![검증 예측 결과 1](report/assets/val/val_batch0_pred.jpg)
 
-![검증 예측 결과 1](runs/detect/val_final/val_batch0_pred.jpg)
+![검증 예측 결과 2](report/assets/val/val_batch1_pred.jpg)
 
-![검증 예측 결과 2](runs/detect/val_final/val_batch1_pred.jpg)
-
-![검증 예측 결과 3](runs/detect/val_final/val_batch2_pred.jpg)
-
+![검증 예측 결과 3](report/assets/val/val_batch2_pred.jpg)
 <!-- /report:auto:predictions -->
 
 - **평가 (`val.py`):** 드론 촬영과 동일한 도메인의 **Val 검증 이미지**에서 Dirt·Damage를 분리 탐지하는 것을 확인함. (별도 Test 세트 미구분)
