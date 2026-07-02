@@ -44,6 +44,10 @@ RUN_SUMMARY_START = "<!-- report:auto:run-summary -->"
 RUN_SUMMARY_END = "<!-- /report:auto:run-summary -->"
 EXP_START = "<!-- report:auto:exp-comparison -->"
 EXP_END = "<!-- /report:auto:exp-comparison -->"
+HYPER_TUNING_START = "<!-- report:auto:hyper-tuning -->"
+HYPER_TUNING_END = "<!-- /report:auto:hyper-tuning -->"
+ERROR_ANALYSIS_START = "<!-- report:auto:error-analysis -->"
+ERROR_ANALYSIS_END = "<!-- /report:auto:error-analysis -->"
 EDA_START = "<!-- report:auto:eda -->"
 EDA_END = "<!-- /report:auto:eda -->"
 
@@ -465,6 +469,7 @@ def update_exp_comparison_table(
     final: RunResult,
     train_dir: Path | None,
 ) -> str:
+    """실측 run만 표시 — Baseline vs 최종. EXP 1~3 설계는 hyper-tuning 블록."""
     rows = [
         "| 실험 | 모델 | Epoch | mAP50 | mAP50-95 | 비고 |",
         "| :--- | :--- | ---: | ---: | ---: | :--- |",
@@ -473,29 +478,165 @@ def update_exp_comparison_table(
     if baseline:
         rows.append(
             f"| **Baseline** | {format_model_name(baseline.model)} | {baseline.best_epoch} | "
-            f"{baseline.map50:.3f} | {baseline.map50_95:.3f} | 초기 기본 학습 (Nano) |"
+            f"{baseline.map50:.3f} | {baseline.map50_95:.3f} | YOLO11n · 최소 증강 |"
         )
     else:
         rows.append("| **Baseline** | YOLO11n (Nano) | 20 | — | — | 학습 진행 중 |")
 
     rows.append(
-        f"| **EXP 1** | {format_model_name(final.model)} | {final.best_epoch} | "
-        f"{final.map50:.3f} | {final.map50_95:.3f} | Small 스케일업 |"
+        f"| **최종 모델** | {format_model_name(final.model)} | {final.best_epoch} | "
+        f"{final.map50:.3f} | {final.map50_95:.3f} | EXP 1~3 통합 (`configs/train.yaml`) |"
     )
-    rows.append(
-        f"| **EXP 2** | {format_model_name(final.model)} + Aug | {final.best_epoch} | "
-        f"{final.map50:.3f} | {final.map50_95:.3f} | 도메인 증강 적용 |"
-    )
-    hp = load_train_hyperparameters(train_dir)
-    exp3_note = f"Epoch {hp['epochs']} · Batch {hp['batch']} · Patience {hp['patience']}"
 
-    rows.append(
-        f"| **EXP 3** | {format_model_name(final.model)} + Tuned | {final.best_epoch} | "
-        f"{final.map50:.3f} | {final.map50_95:.3f} | {exp3_note} |"
-    )
+    if baseline:
+        delta = (final.map50 - baseline.map50) * 100
+        rows.append(
+            f"| **개선** | — | — | **+ {delta:.1f}%p** | "
+            f"+ {(final.map50_95 - baseline.map50_95) * 100:.1f}%p | Baseline 대비 |"
+        )
 
     body = "\n".join(rows)
-    return replace_block(content, EXP_START, EXP_END, body)
+    content = replace_block(content, EXP_START, EXP_END, body)
+    return update_hyper_tuning_section(content, baseline, final, train_dir)
+
+
+def update_hyper_tuning_section(
+    content: str,
+    baseline: RunResult | None,
+    final: RunResult,
+    train_dir: Path | None,
+) -> str:
+    hp = load_train_hyperparameters(train_dir)
+    lines = [
+        "**EXP 1~3은 누적 설계 단계** — 아래는 실측 비교(Baseline vs 최종)와 함께 기록한 결정 근거입니다.",
+        "",
+        "| 단계 | 변경 | 선택 | 근거 |",
+        "| :--- | :--- | :--- | :--- |",
+        "| **EXP 1** | 모델 크기 | Nano → **Small** | "
+        + (
+            f"Baseline mAP50 {baseline.map50:.3f} → 최종 {final.map50:.3f} (+{(final.map50 - baseline.map50) * 100:.1f}%p) |"
+            if baseline
+            else "미세 Damage 탐지 위해 Small 채택 |"
+        ),
+        "| **EXP 2** | Data Augmentation | HSV·Mosaic·Mixup·Erasing | 도메인(안개·반사) · `flipud=0` |",
+        f"| **EXP 3** | Epoch · Batch · Patience | **{hp['epochs']}ep · batch {hp['batch']} · patience {hp['patience']}** | "
+        "M1 16GB OOM → batch 8 · Cosine LR |",
+        "",
+        "> **한계:** EXP별 독립 ablation run은 일정상 미수행. Baseline↔최종 정량 비교 + 설계 근거로 대체.",
+    ]
+    return replace_block(content, HYPER_TUNING_START, HYPER_TUNING_END, "\n".join(lines))
+
+
+def _confusion_error_counts(confusion: dict) -> dict[str, int]:
+    labels = confusion.get("labels", [])
+    matrix = confusion.get("predicted_rows", [])
+    if len(labels) < 3 or len(matrix) < 3:
+        return {}
+
+    idx = {name: i for i, name in enumerate(labels)}
+    dirt, damage, bg = idx.get("dirt"), idx.get("damage"), idx.get("background")
+    if None in (dirt, damage, bg):
+        return {}
+
+    return {
+        "dirt_correct": int(matrix[dirt][dirt]),
+        "damage_correct": int(matrix[damage][damage]),
+        "dirt_to_damage": int(matrix[dirt][damage]),
+        "damage_to_dirt": int(matrix[damage][dirt]),
+        "dirt_to_background_fn": int(matrix[bg][dirt]),
+        "damage_to_background_fn": int(matrix[bg][damage]),
+        "background_to_dirt_fp": int(matrix[dirt][bg]),
+        "background_to_damage_fp": int(matrix[damage][bg]),
+    }
+
+
+def _load_predict_error_examples(predict_run_dir: Path | None) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    if predict_run_dir is None:
+        return [], []
+    payload_path = predict_run_dir / "predictions.json"
+    if not payload_path.exists():
+        return [], []
+
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    labels_dir = DEFAULT_DATA_DIR / "labels" / "val"
+    fn_cases: list[tuple[str, int]] = []
+    fp_cases: list[tuple[str, int]] = []
+
+    for item in payload.get("results", []):
+        source = str(item.get("source", ""))
+        stem = Path(source).stem
+        label_path = labels_dir / f"{stem}.txt"
+        has_label = label_path.exists() and label_path.read_text(encoding="utf-8").strip()
+        det_count = int(item.get("detection_count", 0))
+        if has_label and det_count == 0:
+            gt_count = len(label_path.read_text(encoding="utf-8").strip().splitlines())
+            fn_cases.append((source, gt_count))
+        if not has_label and det_count >= 3:
+            fp_cases.append((source, det_count))
+
+    fn_cases.sort(key=lambda x: -x[1])
+    fp_cases.sort(key=lambda x: -x[1])
+    return fn_cases[:5], fp_cases[:5]
+
+
+def update_error_analysis_section(
+    content: str,
+    val_dir: Path | None,
+    predict_run_dir: Path | None,
+    updated_at: str,
+) -> str:
+    val_metrics = load_val_metrics(val_dir) if val_dir else None
+    if not val_metrics:
+        return content
+
+    lines = [f"- **자동 반영:** {updated_at} (`val_final` + `predict.py`)"]
+
+    classes = val_metrics.get("classes") or {}
+    if classes:
+        lines.extend(["", "**클래스별 Val 지표**", ""])
+        lines.extend(
+            [
+                "| 클래스 | Precision | Recall | mAP50 |",
+                "| :--- | ---: | ---: | ---: |",
+            ]
+        )
+        for name in ("dirt", "damage"):
+            info = classes.get(name)
+            if not info:
+                continue
+            label = "Dirt (0)" if name == "dirt" else "Damage (1)"
+            lines.append(
+                f"| **{label}** | {float(info['precision']):.3f} | "
+                f"{float(info['recall']):.3f} | {float(info['map50']):.3f} |"
+            )
+
+    confusion = val_metrics.get("confusion_matrix") or {}
+    errors = _confusion_error_counts(confusion)
+    if errors:
+        lines.extend(["", "**혼동행렬 기반 오류 패턴 (BBox 단위)**", ""])
+        lines.extend(
+            [
+                "| 패턴 | 건수 | 해석 |",
+                "| :--- | ---: | :--- |",
+                f"| **Damage → Background (FN)** | **{errors['damage_to_background_fn']}** | Damage 미탐 (핵심 이슈) |",
+                f"| Background → Damage (FP) | {errors['background_to_damage_fp']} | 배경 오탐 |",
+                f"| Dirt → Background (FN) | {errors['dirt_to_background_fn']} | Dirt 미탐 |",
+                f"| Background → Dirt (FP) | {errors['background_to_dirt_fp']} | Dirt 오탐 |",
+                f"| Dirt ↔ Damage 혼동 | {errors['dirt_to_damage'] + errors['damage_to_dirt']} | 클래스 간 혼동 **낮음** |",
+            ]
+        )
+
+    fn_cases, fp_cases = _load_predict_error_examples(predict_run_dir)
+    if fn_cases or fp_cases:
+        lines.extend(["", "**대표 오류 사례 (predict.py 스캔)**", ""])
+        lines.extend(["| 유형 | 이미지 | GT/탐지 |", "| :--- | :--- | ---: |"])
+        for source, gt in fn_cases[:3]:
+            lines.append(f"| **FN (미탐)** | `{source}` | GT BBox **{gt}** · 탐지 0 |")
+        for source, det in fp_cases[:2]:
+            lines.append(f"| **FP (오탐)** | `{source}` | 배경 · 탐지 **{det}** |")
+
+    body = "\n".join(lines)
+    return replace_block(content, ERROR_ANALYSIS_START, ERROR_ANALYSIS_END, body)
 
 
 def update_run_summary(
@@ -668,6 +809,7 @@ def apply_report_updates(
         if eda_dir and eda_dir.exists():
             updated = update_eda_section(updated, eda_dir, ts)
         updated = update_visual_sections(updated, train_dir, val_dir, ts)
+        updated = update_error_analysis_section(updated, val_dir, predict_run_dir, ts)
         return updated
 
     updated = update_baseline_row(updated, baseline)
@@ -677,6 +819,9 @@ def apply_report_updates(
     if eda_dir and eda_dir.exists():
         updated = update_eda_section(updated, eda_dir, final.updated_at)
     updated = update_visual_sections(updated, train_dir, val_dir, final.updated_at)
+    updated = update_error_analysis_section(
+        updated, val_dir, predict_run_dir, final.updated_at
+    )
     return updated
 
 

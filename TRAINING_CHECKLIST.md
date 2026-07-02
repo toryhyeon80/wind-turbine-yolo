@@ -1,7 +1,7 @@
 # 학습 준비 체크리스트 (wind-turbine-yolo)
 
 > 풍력 터빈 블레이드 **Dirt / Damage** 객체 탐지(YOLO11) 프로젝트 기준  
-> 발표·리포트용 근거 정리 — 최종 갱신: 2026-07-01
+> 발표·리포트용 근거 정리 — 최종 갱신: 2026-07-02
 
 **문서 구성**
 
@@ -20,12 +20,14 @@
 
 | 주제 | 경로 |
 | :--- | :--- |
-| 데이터 분할 | `split_data.py`, `data/data.yaml` |
+| 데이터 분할 | `split_data.py`, `split_stats.py`, `data/data.yaml` |
+| EDA | `eda.py`, `runs/eda/` |
 | 학습 설정 | `configs/train.yaml`, `configs/train_baseline.yaml` |
+| 추론 | `predict.py`, `configs/predict.yaml`, `runs/predict/` |
 | 학습 로그 | `runs/detect/train/results.csv`, `results.png` |
 | 최종 검증 | `runs/detect/val_final/val_metrics.yaml` |
 | 시각화 | `runs/detect/val_final/confusion_matrix.png`, `val_batch*_pred.jpg` |
-| 종합 리포트 | `report.md` |
+| 종합 리포트 | `report.md`, `update_report.py`, `update_notion.py` |
 
 ---
 
@@ -52,11 +54,11 @@
   - **Baseline:** `configs/train_baseline.yaml` — 동일 도메인 규칙, 증강 최소화
   - **발표 멘트:** 풍력 터빈 도메인에 맞춘 증강 설계 (안개·빛 반사·각도 다양성)
 
-- [x] 🟡 **학습 / 검증 / 테스트 데이터셋으로 분리했는가?**
-  - **완료:** Train : Val = **8 : 2** (`split_data.py`, seed=42)
-  - **미구축:** 독립 **Test** 세트 없음 (Val 기준 평가)
+- [x] **학습 / 검증 / 테스트 데이터셋으로 분리했는가?**
+  - **완료:** Train : Val = **8 : 2** (`split_data.py`, seed=42) · 총 13,470장
+  - **Test:** 독립 세트 **의도적 미구축** — Val로 개발·최종 평가 (`report.md` §1 Train/Val/Test 정책)
   - **경로:** `data/images/train`, `data/images/val`
-  - **발표 멘트:** Train·Val 8:2 분할 완료. 최종 성능은 Validation 기준
+  - **발표 멘트:** Train·Val 8:2 완료. Test 없음은 설계 선택이며 Validation 기준으로 보고
 
 - [x] **데이터 정규화를 수행했는가?**
   - **방식:** 탐지 과제 — 픽셀 스케일링·리사이즈(`imgsz: 640`)는 Ultralytics가 학습 시 자동 처리
@@ -77,45 +79,46 @@
   - **산출물:** `runs/detect/train/results.csv`, `results.png`
   - **발표 멘트:** Train·Val Loss 동시 추적으로 과적합 징후 모니터링
 
-- [x] 🟡 **과적합 방지 기법을 적용했는가?**
-  - **적용:** Early stopping (`patience: 10`), Data Augmentation, `close_mosaic: 10`, Cosine LR
-  - **프레임워크 기본:** L2 (`weight_decay: 0.0005`)
-  - **미적용:** Dropout, L1 커스텀 설계
-  - **발표 멘트:** 조기 종료·증강·학습률 스케줄로 일반화 확보
+- [x] **과적합 방지 기법을 적용했는가?**
+  - **적용:** Early stopping, 도메인 Data Augmentation, `close_mosaic: 10`, Cosine LR, Pretrained YOLO11
+  - **L2:** Ultralytics 기본 `weight_decay: 0.0005` (별도 설계 없이 프레임워크 적용)
+  - **미적용 (의도):** Dropout(`0.0` 기본), L1(YOLO API 미지원) — 탐지 과제 표준·실익 적음
+  - **근거:** `report.md` §4 과적합 방지 · `runs/detect/train/results.png`
+  - **발표 멘트:** 증강·Early stopping·기본 L2로 일반화 확보. Dropout/L1 미설계는 YOLO 탐지 관행
 
-- [x] 🟡 **하이퍼파라미터 튜닝을 수행했는가?**
+- [x] **하이퍼파라미터 튜닝을 수행했는가?**
   - **튜닝 항목:** 모델 크기(Nano→Small), Epoch(50), Batch(8), 증강 강도, patience
-  - **문서화:** `report.md` EXP 1~3
-  - **한계:** EXP별 독립 run 폴더·수치 비교는 부분적 (본학습 `train` 중심)
-  - **발표 멘트:** 모델 스케일·증강·학습 스케줄 실험 수행
+  - **정량 비교:** Baseline mAP50 **0.538** vs 최종 **0.575** (+3.7%p)
+  - **문서화:** `report.md` EXP 설계 표 (`report:auto:hyper-tuning`)
+  - **한계:** EXP별 독립 ablation run 미수행 (일정상 Baseline↔최종 + 설계 근거로 대체)
+  - **발표 멘트:** YAML 기반 하이퍼파라미터 설정 + Baseline 대비 정량 개선
 
 - [x] **문제에 적절한 평가 지표를 선정하였는가?**
   - **지표:** mAP50, mAP50-95, Precision, Recall, F1 곡선, Confusion Matrix
   - **산출물:** `runs/detect/val_final/`
-  - **최종 수치 (Val):** mAP50 ≈ 0.574, mAP50-95 ≈ 0.318
+  - **최종 수치 (Val):** mAP50 **0.574**, P **0.597**, R **0.640** — `val_final/val_metrics.yaml`
   - **발표 멘트:** 객체 탐지 표준 지표(mAP·P/R·F1·혼동행렬) 사용
 
-- [x] 🟡 **모델이 잘못 출력한 데이터 포인트를 확인하였는가?**
-  - **시각 확인:** `val_final/val_batch0_pred.jpg` 등 예측 오버레이
-  - **정량:** `confusion_matrix.png` — Dirt↔Damage 혼동 낮음, Damage→Background FN 다수
-  - **보완 여지:** 클래스별 FN/FP 수치 표 정리
-  - **발표 멘트:** 예측 시각화·혼동행렬로 오류 패턴 확인
+- [x] **모델이 잘못 출력한 데이터 포인트를 확인하였는가?**
+  - **정량:** `report.md` `report:auto:error-analysis` — 클래스별 P/R·mAP50, 혼동행렬 패턴, FN/FP 대표 사례
+  - **시각:** `val_final/val_batch*_pred.jpg`, `confusion_matrix.png`
+  - **핵심:** Damage→Background FN **866건**, 대표 FN `DJI_0748_05_07.png` (GT 12 · 탐지 0)
+  - **발표 멘트:** 혼동행렬·predict 스캔으로 오류 유형·대표 사례 확인
 
 ---
 
 ## 평가
 
-- [ ] **문제에 적합한 탐지 모델과 비교용 Baseline 모델을 선정했는가?**
+- [x] **문제에 적합한 탐지 모델과 비교용 Baseline 모델을 선정했는가?**
   - **선정:** 최종 YOLO11s vs Baseline YOLO11n — `configs/train_baseline.yaml`
-  - **진행:** Baseline 학습 진행 중 (`runs/detect/baseline/`, 20 Epoch)
-  - **완료 후:** `python3 update_report.py` → `report.md` 비교 표 자동 갱신
-  - **발표 멘트:** Small vs Nano 비교 설계. Baseline 완료 후 정량 비교 예정
+  - **완료:** Baseline mAP50 **0.538** (best epoch 18) · `runs/detect/baseline/`
+  - **비교:** `update_report.py` → `report.md` Baseline vs 최종 (+3.7%p mAP50)
+  - **발표 멘트:** Small vs Nano 정량 비교 완료
 
-- [x] 🟡 **테스트 데이터로 최종 성능을 확인했는가?** (학습 완료 후)
-  - **완료:** 본학습 완료 (`runs/detect/train/weights/best.pt`)
-  - **검증:** `python3 val.py` → `val_final` (Val 세트 재평가)
-  - **미구축:** 독립 Test 세트 없음 → **Validation 기준** 최종 성능
-  - **발표 멘트:** Val 기준 mAP50 0.575 확인. Hold-out Test는 미구축
+- [x] **테스트 데이터로 최종 성능을 확인했는가?** (학습 완료 후)
+  - **완료 (Val 대체):** `val.py` → `val_final` — mAP50 **0.574**, P **0.597**, R **0.640**
+  - **정책:** Hold-out Test 미구축 — `report.md` §1에 설계·한계 명시
+  - **발표 멘트:** 독립 Test 대신 **Validation set 기준** 최종 성능 보고 (한계 포함)
 
 - [x] **학습 로그(Loss, mAP)를 통해 성능을 확인했는가?** (학습 중)
   - **로그:** `runs/detect/train/results.csv` (50 Epoch)
@@ -134,11 +137,11 @@
   - **OOM 대응:** `train.py` — batch 8→4→2 자동 재시도
   - **발표 멘트:** YAML 기반 하이퍼파라미터 관리 + M1 MPS 가속
 
-- [x] 🟡 **오탐(False Positive)·미탐(False Negative)을 분석했는가?**
-  - **분석:** Confusion Matrix — Damage→Background FN 866건 (핵심 이슈)
-  - **정성:** `report.md` — 소형 Damage FN, Dirt/Damage 클래스 혼동 낮음
-  - **보완 여지:** 클래스별 Precision/Recall 수치 표 추가
-  - **발표 멘트:** 혼동행렬로 FP/FN 패턴 분석. Damage 미탐이 주요 개선 포인트
+- [x] **오탐(False Positive)·미탐(False Negative)을 분석했는가?**
+  - **클래스별:** Dirt P **0.521** R **0.750** · Damage P **0.673** R **0.530** — `val_metrics.yaml`
+  - **혼동:** Damage→Background FN **866** · Background→Damage FP **323** · Dirt↔Damage **7**
+  - **근거:** `report.md` `report:auto:error-analysis` · `confusion_matrix.png`
+  - **발표 멘트:** Damage 미탐이 핵심 이슈, 클래스 간 혼동은 낮음
 
 ---
 
@@ -150,14 +153,17 @@
 
 | # | 항목 | 상태 | 근거 | 발표 포인트 |
 | :-: | :--- | :---: | :--- | :--- |
-| A1 | 데이터 분할 자동화 (배경 이미지·고아 라벨 처리) | ✅ | `split_data.py` | 재현 가능한 전처리 스크립트 |
-| A2 | YAML 기반 설정 분리 (하드코딩 금지) | ✅ | `data/data.yaml`, `configs/*.yaml` | 실험 설정 변경·추적 용이 |
+| A1 | 데이터 분할 자동화 (배경·고아 라벨 + report 연동) | ✅ | `split_data.py`, `split_stats.py` | `split_summary.yaml` → report auto:split |
+| A2 | YAML 기반 설정 분리 (하드코딩 금지) | ✅ | `data/data.yaml`, `configs/*.yaml` | predict·val·baseline 포함 |
 | A3 | OOM 시 batch 자동 축소 | ✅ | `train.py`, `val.py` | M1 16GB 환경 안정 학습 |
-| A4 | 학습 후 리포트 자동 갱신 | ✅ | `update_report.py` | mAP·그래프·이미지 자동 반영 |
-| A5 | Notion 연동 + 이미지 업로드 | ✅ | `update_notion.py`, `.env.example` | 협업·발표 자료 자동 동기화 |
+| A4 | 학습·추론 후 리포트 자동 갱신 | ✅ | `update_report.py` | split·EDA·mAP·predict 블록 |
+| A5 | Notion 연동 + 이미지 업로드 | ✅ | `update_notion.py`, `.env` | 표 볼드·중첩 bullet 지원 |
 | A6 | 별도 재검증 파이프라인 | ✅ | `val.py`, `configs/val.yaml` | `best.pt` 공식 Val 재평가 |
 | A7 | 1 Epoch 파이프라인 스모크 테스트 | ✅ | `train.py --test` | 학습 전 환경·데이터 검증 |
-| A8 | Git·의존성·시크릿 관리 | ✅ | `.gitignore`, `requirements.txt` | 데이터·가중치 제외, 토큰 분리 |
+| A8 | Git·의존성·시크릿 관리 | ✅ | `.gitignore`, `requirements.txt` | Public GitHub, `.env` 제외 |
+| A9 | EDA 자동화 + report 연동 | ✅ | `eda.py` | `runs/eda/` → report auto:eda |
+| A10 | Phase 1 Test 추론 + JSON | ✅ | `predict.py`, `configs/predict.yaml` | Val 2,694장 · BBox 1,294 |
+| A11 | predict 결과 report 자동 반영 | ✅ | `update_report.py` | report auto:predict-inference |
 
 ### B. 도메인·환경 특화 (풍력 터빈 / M1 Mac)
 
@@ -174,27 +180,28 @@
 | # | 항목 | 상태 | 근거 | 발표 포인트 |
 | :-: | :--- | :---: | :--- | :--- |
 | C1 | 해커톤 루브릭 1~3 섹션 리포트 | ✅ | `report.md` | 데이터·비교·실험·평가 체계적 정리 (섹션 1~4) |
-| C2 | EXP 1~3 실험 로그 문서화 | 🟡 | `report.md` 섹션 3 | 스케일업·증강·하이퍼파라미터 실험 서술 |
-| C3 | Loss/mAP·예측 이미지 자동 삽입 | ✅ | `update_report.py` | 시각 근거 자동 축적 |
-| C4 | Baseline vs 최종 비교 프레임 | ⏳ | `update_report.py` | Baseline 완료 후 % 향상 자동 계산 |
+| C2 | EXP 1~3 실험 로그 문서화 | ✅ | `report.md` §3 · hyper-tuning | Baseline vs 최종 + 설계 근거 표 |
+| C3 | Loss/mAP·예측·추론 이미지 자동 삽입 | ✅ | `update_report.py` | val.py + predict.py 시각화 |
+| C4 | Baseline vs 최종 비교 프레임 | ✅ | `update_report.py`, `report.md` | +3.7%p mAP50 자동 계산 |
 | C5 | 학습 준비 체크리스트 문서화 | ✅ | `TRAINING_CHECKLIST.md` | 발표용 준비 과정 근거 정리 |
+| C6 | UI/UX 가이드 문서 | ✅ | `DESIGN.md` | Phase 3 LogPick 테마 |
 
 ### D. 평가 심화 (기본 체크리스트 보완)
 
 | # | 항목 | 상태 | 근거 | 발표 포인트 |
 | :-: | :--- | :---: | :--- | :--- |
 | D1 | Val 메트릭 이중 저장 (YAML + CSV) | ✅ | `val_metrics.yaml`, `results.csv` | 리포트·Notion 도구 호환 |
-| D2 | 클래스별 혼동 분석 (Dirt / Damage) | 🟡 | `confusion_matrix.png` | 클래스 간 혼동은 낮음 |
-| D3 | Damage→Background FN 이슈 식별 | 🟡 | 혼동행렬, `report.md` | 미탐이 핵심 개선 포인트 |
-| D4 | 클래스별 mAP (dirt / damage) | 🟡 | Val 터미널 로그 | 리포트 표 미정리 |
+| D2 | 클래스별 혼동 분석 (Dirt / Damage) | ✅ | `val_metrics.yaml`, report error-analysis | Dirt↔Damage 혼동 7건 |
+| D3 | Damage→Background FN 이슈 식별 | ✅ | FN **866** · report auto:error-analysis | 미탐 핵심 개선 포인트 |
+| D4 | Val Precision / Recall 수치 | ✅ | `val_metrics.yaml`, `report.md` | run-summary·metrics-visuals 반영 |
 
-### E. Phase 2·3 (아직 미착수 — `references.md` 기준)
+### E. Phase 2·3 (MVP 완료 — `references.md` 기준)
 
 | # | 항목 | 상태 | 예정 경로 | 비고 |
 | :-: | :--- | :---: | :--- | :--- |
-| E1 | 추론 스크립트 (`predict.py`) | ⬜ | Phase 1 Test | 단일 이미지 BBox 추론 |
-| E2 | FastAPI 백엔드 | ⬜ | `backend/` | `best.pt` → JSON API |
-| E3 | Next.js 프론트엔드 | ⬜ | `frontend-user/` | LogPick 테마 데모 UI |
+| E1 | 추론 스크립트 (`predict.py`) | ✅ | `predict.py`, `configs/predict.yaml` | Val 일괄 완료 · JSON·report 연동 |
+| E2 | FastAPI 백엔드 | ✅ | `backend/`, `configs/api.yaml` | `POST /api/v1/predict` · Swagger `/docs` |
+| E3 | Next.js / Streamlit UI | ✅ | `app.py` (Streamlit MVP) | Live Demo · 업로드→BBox 시각화 |
 
 ---
 
@@ -208,9 +215,10 @@ Train/Val 분할          →    YAML 설정 분리, seed 고정
 모델 선택·학습          →    MPS 가속, OOM fallback, --test 모드
 과적합·하이퍼파라미터    →    Baseline 설정 분리, EXP 문서화
 평가 지표·FP/FN         →    val.py 재검증, 혼동행렬 심화 분석
-Baseline 비교           →    update_report 자동 비교표
-(없음)                  →    report.md, Notion 자동화, Git 관리
-(없음)                  →    Phase 2 API, Phase 3 UI (예정)
+Baseline 비교           →    update_report 자동 비교표 (완료)
+(없음)                  →    report.md, Notion 자동화, Public GitHub
+(없음)                  →    predict.py Val 일괄 추론 (Phase 1 Test 완료)
+(없음)                  →    Phase 2 FastAPI MVP, Phase 3 Streamlit MVP (완료)
 ```
 
 ---
@@ -219,8 +227,8 @@ Baseline 비교           →    update_report 자동 비교표
 
 | 구분 | 내용 |
 | :--- | :--- |
-| **기본 체크리스트** | 18항목 중 완료 10 · 부분 5 · 진행 1 · 미착수 2(Phase 2·3) |
-| **추가 개발** | 파이프라인 자동화 8 · 도메인 특화 5 · 문서·시각화 5 · 평가 심화 4 |
-| **강점 (발표 강조)** | ML 필수 항목 + **재현 가능한 파이프라인·도메인 규칙·자동 리포트** |
-| **진행 중** | Baseline(YOLO11n) 학습 → 완료 후 `update_report.py` |
-| **한계·향후** | Test 세트 없음, Damage FN 보완, Phase 2 API·Phase 3 UI |
+| **기본 체크리스트** | 18항목 중 완료 18 · 부분 0 · 미착수 0(Phase 2·3 제외) |
+| **추가 개발** | 파이프라인 자동화 11 · 도메인 특화 5 · 문서·시각화 6 · 평가 심화 4 |
+| **강점 (발표 강조)** | ML 필수 + **파이프라인·추론·자동 리포트·Notion** |
+| **Phase 1 Test** | `predict.py` Val 2,694장 추론 완료 (`runs/predict/val_batch/`) |
+| **한계·향후** | Test 세트 없음, Damage FN 보완, Next.js 풀 UI(`DESIGN.md`) 확장 |

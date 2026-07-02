@@ -12,28 +12,31 @@
 | S1  | **Ultralytics YOLO**   | 객체 탐지 (YOLO11)                 | **Phase 1** (Train)   | [docs.ultralytics.com](https://docs.ultralytics.com/)   |
 | S2  | **OpenCV (`cv2`)**     | 추론 결과 시각화 및 이미지 전처리  | **Phase 1** (Test)    | [docs.opencv.org](https://docs.opencv.org/)             |
 | S3  | **FastAPI**            | AI 추론 결과를 반환하는 백엔드 API | **Phase 2** (Backend) | [fastapi.tiangolo.com](https://fastapi.tiangolo.com/)   |
-| S4  | **Next.js + Tailwind** | B2B SaaS 데모용 프론트엔드         | **Phase 3** (Web UI)  | `DESIGN.md` 참조                                        |
+| S4  | **Streamlit** (MVP) / **Next.js + Tailwind** (확장) | B2B SaaS 데모용 프론트엔드 | **Phase 3** (Web UI) | `app.py` · `DESIGN.md` |
 | S5  | **notion-client**      | mAP 결과 및 로그 자동화 리포팅     | 공통 (Logging)        | [developers.notion.com](https://developers.notion.com/) |
 
 ---
 
 ## 2. 영역별 상세 및 독학/구현 순서
 
-### Phase 1: AI 엔진 학습 및 평가 (현재 단계)
+### Phase 1: AI 엔진 학습 및 평가 ✅
 
 - **목표:** `split_data.py`로 데이터를 나누고, `train.py`로 YOLO 모델 학습.
 - **제약:** Mac 16GB 램을 고려하여 모델은 `yolo11s.pt` (Small 버전)만 사용.
 - **증강(Augmentation):** `flipud=0.0`(상하 반전 금지) 등 도메인 지식 필수 적용.
+- **상태:** Baseline YOLO11n → 최종 YOLO11s (Val mAP50 **0.574**), `predict.py` Val 추론·`report.md`·Notion 자동화 완료.
 
-### Phase 2: 백엔드 API 서버 (`backend/`)
+### Phase 2: 백엔드 API 서버 (`backend/`) — MVP ✅
 
 - **목표:** 학습된 `best.pt` 가중치를 로드하고, 프론트엔드에서 이미지를 받으면 Bounding Box와 클래스(Dirt/Damage)를 JSON으로 반환.
-- **주의:** Phase 1의 학습이 완전히 끝나서 가중치 파일이 생성된 이후에 착수.
+- **구현:** `GET /health`, `GET /api/v1/model`, `POST /api/v1/predict` · Swagger `/docs`
+- **실행:** `python3 -m uvicorn backend.main:app --reload --port 8000`
 
-### Phase 3: 프론트엔드 B2B 웹 데모 (`frontend-user/`)
+### Phase 3: 웹 데모 — Streamlit MVP ✅ / Next.js 확장 예정
 
-- **목표:** `DESIGN.md`의 LogPick 브랜드 테마(Navy/Teal)를 적용한 결과 시각화 대시보드.
-- **UI 구조:** 좌측(업로드 및 원본) / 우측(YOLO 추론 결과 및 발견된 객체 수 카운팅).
+- **MVP (`app.py`):** 이미지 업로드 → YOLO 추론 → BBox 시각화 Live Demo.
+- **실행:** `python3 -m streamlit run app.py`
+- **확장 (`frontend-user/`, `DESIGN.md`):** LogPick Navy/Teal 테마 B2B 대시보드 — 해커톤 이후 착수.
 
 ---
 

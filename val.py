@@ -198,23 +198,44 @@ def save_val_artifacts(output_dir: Path, weights_path: Path, metrics: Any) -> No
     recall = float(getattr(metrics.box, "mr", 0.0))      # mean recall
     epoch = _train_best_epoch()
 
+    class_names = list(getattr(metrics, "names", {}).values())
+    per_class: dict[str, dict[str, float]] = {}
+    if class_names:
+        p_list = list(getattr(metrics.box, "p", []) or [])
+        r_list = list(getattr(metrics.box, "r", []) or [])
+        ap50_list = list(getattr(metrics.box, "ap50", []) or [])
+        for idx, name in enumerate(class_names):
+            per_class[name] = {
+                "precision": float(p_list[idx]) if idx < len(p_list) else 0.0,
+                "recall": float(r_list[idx]) if idx < len(r_list) else 0.0,
+                "map50": float(ap50_list[idx]) if idx < len(ap50_list) else 0.0,
+            }
+
+    confusion_payload: dict[str, object] | None = None
+    cm_obj = getattr(metrics, "confusion_matrix", None)
+    if cm_obj is not None and getattr(cm_obj, "matrix", None) is not None:
+        labels = class_names + ["background"]
+        matrix = [[int(v) for v in row] for row in cm_obj.matrix]
+        confusion_payload = {"labels": labels, "predicted_rows": matrix}
+
     # --- val_metrics.yaml: 사람·스크립트가 읽기 쉬운 검증 요약 ---
     val_metrics_path = output_dir / "val_metrics.yaml"
+    payload: dict[str, object] = {
+        "source": "val",
+        "weights": weights_ref,
+        "epoch": epoch,
+        "map50": map50,
+        "map50_95": map50_95,
+        "precision": precision,
+        "recall": recall,
+    }
+    if per_class:
+        payload["classes"] = per_class
+    if confusion_payload:
+        payload["confusion_matrix"] = confusion_payload
+
     with val_metrics_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(
-            {
-                "source": "val",
-                "weights": weights_ref,
-                "epoch": epoch,
-                "map50": map50,
-                "map50_95": map50_95,
-                "precision": precision,
-                "recall": recall,
-            },
-            f,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+        yaml.safe_dump(payload, f, allow_unicode=True, sort_keys=False)
 
     # --- results.csv: update_report·update_notion이 기대하는 컬럼 형식 ---
     results_row = {

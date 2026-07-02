@@ -171,6 +171,28 @@ def strip_html_comments(content: str) -> str:
     return HTML_COMMENT_PATTERN.sub("", content)
 
 
+def strip_leading_document_title(content: str) -> str:
+    """
+    report.md 첫 줄 H1(# 제목)과 바로 뒤 구분선(---)을 제거합니다.
+    Notion 페이지 title property와 본문 heading_1 중복을 방지합니다.
+    """
+    lines = content.splitlines()
+    if not lines or not lines[0].strip().startswith("# "):
+        return content
+
+    idx = 1
+    while idx < len(lines):
+        stripped = lines[idx].strip()
+        if not stripped:
+            idx += 1
+            continue
+        if stripped == "---":
+            idx += 1
+        break
+
+    return "\n".join(lines[idx:]).lstrip("\n")
+
+
 def upload_local_image(token: str, image_path: Path) -> str:
     """로컬 이미지를 Notion File Upload API로 업로드하고 file_upload id를 반환합니다."""
     content_type = mimetypes.guess_type(image_path.name)[0] or "application/octet-stream"
@@ -586,6 +608,10 @@ def main() -> None:
     content, metrics = build_report_content(args.report, args.runs_dir)
     content = strip_html_comments(content)
 
+    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+    page_title = title_match.group(1).strip() if title_match else "YOLO 프로젝트 리포트"
+    content = strip_leading_document_title(content)
+
     updated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
     header = (
         f"> 마지막 자동 업데이트: {updated_at}"
@@ -593,9 +619,6 @@ def main() -> None:
         + "\n\n"
     )
     blocks = markdown_to_notion_blocks(header + content)
-
-    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
-    page_title = title_match.group(1).strip() if title_match else "YOLO 프로젝트 리포트"
 
     print(f"페이지 ID: {page_id}")
     print(f"생성 블록 수: {len(blocks)}")

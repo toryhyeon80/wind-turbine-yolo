@@ -9,7 +9,7 @@
 ### Train / Val 분할 결과
 
 <!-- report:auto:split -->
-- **자동 반영:** 2026-07-02 07:04:39 (`folder_scan`)
+- **자동 반영:** 2026-07-02 09:14:47 (`folder_scan`)
 
 | 항목 | 이미지 수 | 비율 |
 | :--------------- | ----------: | ----: |
@@ -33,12 +33,26 @@
   - `data/images/train`, `data/images/val`
   - `data/labels/train`, `data/labels/val`
 
+### Train / Val / Test 정책
+
+| 구분 | 역할 | 본 프로젝트 |
+| :--- | :--- | :--- |
+| **Train** | 모델이 직접 학습하는 데이터 | ✅ 10,776장 |
+| **Val** | 학습 중 mAP 모니터링 · `best.pt` 선정 · 리포트 수치 | ✅ 2,694장 |
+| **Test** | 학습·튜닝에 전혀 쓰지 않은 최종 일반화 평가 | ❌ **미구축** |
+
+- **분할 설계:** `split_data.py` · `data/data.yaml`은 **train / val만** 정의 (YOLO 표준 워크플로).
+- **Test를 두지 않은 이유:** 해커톤 일정 내 파이프라인(분할→학습→리포트) 완주 우선, 라벨 데이터를 3-way로 나누면 학습량이 과도하게 줄어듦. 즉 “Test가 불필요”가 아니라 **“우선 Val로 개발·평가까지 진행”**한 선택.
+- **수치 해석:** 본 리포트의 mAP·P/R·혼동행렬은 모두 **Validation set 기준**입니다. “Test 성능”이 아닙니다.
+- **한계:** Val 점수로 epoch(50)·증강·모델(Small) 등을 결정했으므로, 독립 Hold-out Test 대비 **다소 낙관적**일 수 있습니다.
+- **용어 주의:** `predict.py`의 “Phase 1 Test”는 **추론 파이프라인 검증 단계** 이름이며, Hold-out Test 세트 평가와는 다릅니다.
+
 ### EDA 및 시각화 (Exploratory Data Analysis)
 
 > 학습 전 데이터 특성 파악 — `python eda.py` 실행 후 `update_report.py` / `update_notion.py`로 자동 반영
 
 <!-- report:auto:eda -->
-- **자동 반영:** 2026-07-02 07:04:39
+- **자동 반영:** 2026-07-02 09:14:47
 - **총 BBox:** 9351개
 
 **클래스별 BBox 분포**
@@ -81,7 +95,7 @@
 - **최종 학습:** `train` | mAP50 **0.575** | mAP50-95 **0.319**
 - **재검증:** `val_final`
 - **Val 메트릭:** mAP50 **0.574** | Precision **0.597** | Recall **0.640**
-- **갱신 시각:** 2026-07-02 07:04:39
+- **갱신 시각:** 2026-07-02 09:14:47
 <!-- /report:auto:run-summary -->
 
 - **Baseline 한계:** 작은 크기의 Damage(손상) 객체를 배경과 혼동하여 놓치는(False Negative) 현상이 잦았음.
@@ -102,11 +116,22 @@
 <!-- report:auto:exp-comparison -->
 | 실험 | 모델 | Epoch | mAP50 | mAP50-95 | 비고 |
 | :--- | :--- | ---: | ---: | ---: | :--- |
-| **Baseline** | YOLO11n (Nano) | 18 | 0.538 | 0.317 | 초기 기본 학습 (Nano) |
-| **EXP 1** | YOLO11s (Small) | 50 | 0.575 | 0.319 | Small 스케일업 |
-| **EXP 2** | YOLO11s (Small) + Aug | 50 | 0.575 | 0.319 | 도메인 증강 적용 |
-| **EXP 3** | YOLO11s (Small) + Tuned | 50 | 0.575 | 0.319 | Epoch 50 · Batch 8 · Patience 10 |
+| **Baseline** | YOLO11n (Nano) | 18 | 0.538 | 0.317 | YOLO11n · 최소 증강 |
+| **최종 모델** | YOLO11s (Small) | 50 | 0.575 | 0.319 | EXP 1~3 통합 (`configs/train.yaml`) |
+| **개선** | — | — | **+ 3.7%p** | + 0.2%p | Baseline 대비 |
 <!-- /report:auto:exp-comparison -->
+
+<!-- report:auto:hyper-tuning -->
+**EXP 1~3은 누적 설계 단계** — 아래는 실측 비교(Baseline vs 최종)와 함께 기록한 결정 근거입니다.
+
+| 단계 | 변경 | 선택 | 근거 |
+| :--- | :--- | :--- | :--- |
+| **EXP 1** | 모델 크기 | Nano → **Small** | Baseline mAP50 0.538 → 최종 0.575 (+3.7%p) |
+| **EXP 2** | Data Augmentation | HSV·Mosaic·Mixup·Erasing | 도메인(안개·반사) · `flipud=0` |
+| **EXP 3** | Epoch · Batch · Patience | **50ep · batch 8 · patience 10** | M1 16GB OOM → batch 8 · Cosine LR |
+
+> **한계:** EXP별 독립 ablation run은 일정상 미수행. Baseline↔최종 정량 비교 + 설계 근거로 대체.
+<!-- /report:auto:hyper-tuning -->
 
 - **EXP 1: 모델 아키텍처 스케일업 (Nano vs Small)**
   - **내용:** 온디바이스(드론) 탑재를 고려하여 가장 가벼운 Nano를 썼으나, 풍력 발전기의 미세 균열 탐지를 위해 파라미터가 조금 더 많은 Small 모델로 스케일업 실험.
@@ -130,8 +155,24 @@
 - **평가 세트:** Test 세트 없음 — 학습에 사용하지 않은 **Val 세트**(`val.py` → `val_final`)로 최종 평가.
 - **학습 환경:** Apple M1 Pro (`device: mps`), `imgsz: 640`, batch 8, workers 0, seed 42
 - **Box Loss & Class Loss:** Train Loss와 Val Loss가 모두 안정적으로 우하향하는 그래프를 확인하여 학습이 정상적으로 이루어졌음을 검증함.
+
+### 과적합 방지 (Regularization)
+
+| 기법 | 적용 | 역할 |
+| :--- | :---: | :--- |
+| **Data Augmentation** (mosaic, mixup, HSV, erasing) | ✅ | 데이터 다양성 → **과적합 완화** (`configs/train.yaml` EXP 2) |
+| **Early stopping** (`patience: 10`) | ✅ | Val mAP 기준 조기 종료 (`configs/train.yaml`) |
+| **`close_mosaic: 10`** | ✅ | 학습 후반 일반화 유도 |
+| **Cosine LR** + warmup | ✅ | 학습률 스케줄 (`cos_lr: true`, `warmup_epochs: 3`) |
+| **L2 (weight_decay)** | ✅ | Ultralytics **기본 0.0005** — 별도 YAML 없이 프레임워크 기본 적용 |
+| **Pretrained YOLO11** | ✅ | ImageNet 등 사전학습 가중치에서 시작 |
+| **Dropout** | ❌ | YOLO 탐지 기본 `dropout: 0.0` — 소형 Damage 탐지에 불리, **의도적 미사용** |
+| **L1** | ❌ | YOLO 학습 API 미지원 — **해당 없음** |
+
+- **정책 요약:** Early stopping + 도메인 증강 + Ultralytics 기본 weight decay(L2)로 **일반화를 확보**했습니다. YOLO 객체 탐지에서는 Dropout/L1 별도 설계가 표준이 아니며, mAP 추가 이득도 제한적입니다.
+- **학습 곡선:** Val Loss가 Train Loss와 함께 안정적으로 수렴 — **심각한 과적합 징후는 관찰되지 않음** (`runs/detect/train/results.png`).
 <!-- report:auto:metrics-visuals -->
-- **자동 반영:** 2026-07-02 07:04:39
+- **자동 반영:** 2026-07-02 09:14:47
 - **Val 재검증 (`val_final`):** mAP50 **0.574** | mAP50-95 **0.318** | Precision **0.597** | Recall **0.640**
 
 ![Loss/mAP 학습 곡선 (Train)](runs/detect/train/results.png)
@@ -140,6 +181,39 @@
 
 ![Box F1 Curve (Val)](runs/detect/val_final/BoxF1_curve.png)
 <!-- /report:auto:metrics-visuals -->
+
+### 오탐·미탐 및 오류 패턴 분석
+
+<!-- report:auto:error-analysis -->
+- **자동 반영:** 2026-07-02 09:14:47 (`val_final` + `predict.py`)
+
+**클래스별 Val 지표**
+
+| 클래스 | Precision | Recall | mAP50 |
+| :--- | ---: | ---: | ---: |
+| **Dirt (0)** | 0.521 | 0.750 | 0.549 |
+| **Damage (1)** | 0.673 | 0.530 | 0.599 |
+
+**혼동행렬 기반 오류 패턴 (BBox 단위)**
+
+| 패턴 | 건수 | 해석 |
+| :--- | ---: | :--- |
+| **Damage → Background (FN)** | **866** | Damage 미탐 (핵심 이슈) |
+| Background → Damage (FP) | 323 | 배경 오탐 |
+| Dirt → Background (FN) | 31 | Dirt 미탐 |
+| Background → Dirt (FP) | 57 | Dirt 오탐 |
+| Dirt ↔ Damage 혼동 | 7 | 클래스 간 혼동 **낮음** |
+
+**대표 오류 사례 (predict.py 스캔)**
+
+| 유형 | 이미지 | GT/탐지 |
+| :--- | :--- | ---: |
+| **FN (미탐)** | `DJI_0748_05_07.png` | GT BBox **12** · 탐지 0 |
+| **FN (미탐)** | `DJI_0995_06_05.png` | GT BBox **6** · 탐지 0 |
+| **FN (미탐)** | `DJI_0436_03_09.png` | GT BBox **5** · 탐지 0 |
+| **FP (오탐)** | `DJI_0977_04_09.png` | 배경 · 탐지 **5** |
+| **FP (오탐)** | `DJI_0593_02_02.png` | 배경 · 탐지 **3** |
+<!-- /report:auto:error-analysis -->
 
 ### Phase 1 Test — predict.py Val 일괄 추론
 
