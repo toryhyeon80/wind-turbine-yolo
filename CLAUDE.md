@@ -22,11 +22,14 @@
 
 ### 학습 결과 (Validation 기준)
 
-| 구분 | 모델 | mAP50 | mAP50-95 | 가중치 |
+| 구분 | 모델 | mAP50 | mAP50-95 | 가중치 / 경로 |
 | :--- | :--- | ---: | ---: | :--- |
 | **Baseline** | YOLO11n (Nano) | 0.538 | 0.317 | `runs/detect/baseline/weights/best.pt` |
+| **EXP1** | YOLO11s (Small) | 0.498 | 0.288 | `runs/detect/exp1_small_minaug/` (20ep·min aug **독립 ablation**) |
 | **최종 모델** | YOLO11s (Small) | 0.575 | 0.319 | `runs/detect/train/weights/best.pt` |
 | **재검증** | YOLO11s | 0.574 | 0.318 | `runs/detect/val_final/` |
+
+- **EXP1 해석:** 동일 조건(20ep·min aug)에서 Small(0.498) < Nano(0.538) → **증강+50ep(EXP2·3)** 통합 후 +3.7%p
 
 - **데이터:** Train 10,776 / Val 2,694 (**총 13,470장**, 8:2, seed=42) · 라벨 2,995 / 배경 10,475
 - **평가:** 독립 Test 세트 없음 → **Validation 기준**
@@ -52,11 +55,14 @@ wind-turbine-yolo/
 ├── update_report.py       # report.md 자동 갱신
 ├── update_notion.py       # Notion 페이지 동기화 + 이미지 업로드
 ├── report.md              # 해커톤 루브릭 리포트 (자동 마커 포함)
+├── PRESENTATION.md        # 15분 발표 PPT 초안 (평가항목 8가지 매핑)
 ├── TRAINING_CHECKLIST.md  # 학습 준비·추가 개발 체크리스트
+├── report/assets/         # GitHub용 이미지 미러 (runs/ → update_report.py 복사)
 ├── DESIGN.md              # LogPick UI/UX 가이드 (Phase 3)
 ├── configs/
 │   ├── train.yaml         # 본학습 (YOLO11s, 50 epoch, batch 8)
 │   ├── train_baseline.yaml # Baseline (YOLO11n, 20 epoch)
+│   ├── train_exp1_small_minaug.yaml # EXP1 (YOLO11s, 20ep, min aug)
 │   ├── val.yaml           # Val 재검증 (val_final)
 │   └── predict.yaml       # 추론 (conf, 저장 경로)
 ├── data/
@@ -94,6 +100,9 @@ python3 train.py --test           # 1 Epoch 파이프라인 스모크 테스트
 
 # 4. Baseline (비교군)
 python3 train.py --config configs/train_baseline.yaml --no-report
+
+# 4b. EXP1 (Small + min aug ablation, 20ep)
+python3 train.py --config configs/train_exp1_small_minaug.yaml --no-report
 
 # 5. Val 재검증
 python3 val.py                    # runs/detect/val_final/
@@ -171,7 +180,7 @@ python3 update_notion.py --skip-eda   # EDA 생략 시
 | `report:auto:split` | Train/Val 분할 표 (`split_summary.yaml` 또는 data/ 집계) |
 | `report:auto:eda` | EDA 클래스 분포·인사이트·그래프 |
 | `report:auto:run-summary` | 최종 학습·재검증·Val P/R 요약 |
-| `report:auto:exp-comparison` | Baseline / EXP 비교 표 |
+| `report:auto:exp-comparison` | Baseline · **EXP1** · 최종 비교 표 |
 | `report:auto:metrics-visuals` | Loss/mAP · Confusion Matrix · F1 · Val P/R |
 | `report:auto:predict-inference` | predict.py Val 일괄 추론 집계·대표 이미지 |
 | `report:auto:predictions` | val.py 검증 예측 BBox 이미지 |
@@ -205,6 +214,7 @@ NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
 | :--- | :--- |
 | `runs/detect/train/` | `results.csv`, `results.png`, `weights/best.pt` |
 | `runs/detect/baseline/` | Baseline 학습 결과 |
+| `runs/detect/exp1_small_minaug/` | EXP1 독립 ablation (mAP50 0.498) |
 | `runs/detect/val_final/` | 재검증 메트릭·혼동행렬·예측 이미지 |
 | `runs/eda/` | 클래스 분포·BBox 크기 EDA 그래프 |
 | `runs/predict/val_batch/` | Val 일괄 추론 · `predictions.json` |
@@ -235,7 +245,9 @@ NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
 
 ## 8. Git 규칙
 
-**`.gitignore` 대상:** `data/`, `*.pt`, `.env`, `node_modules/`, `runs/` (선택)
+**`.gitignore` 대상:** `data/`, `.env`, `node_modules/` · `*.pt`는 루트만 제외, **`runs/**/*.pt`는 추적** (과제 제출용)
+
+> `runs/` 전체는 GitHub에 포함됨 (~400MB). 원본 `data/`는 제외.
 
 **커밋 예시:**
 - `feat(ml): eda.py EDA 시각화 추가`
@@ -250,6 +262,7 @@ NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
 | :--- | :--- |
 | `references.md` | OSS 스택 · Phase 매핑 |
 | `report.md` | 해커톤 루브릭 리포트 |
+| `PRESENTATION.md` | 15분 발표 PPT 초안 |
 | `TRAINING_CHECKLIST.md` | 학습 준비·추가 개발 체크리스트 |
 | `DESIGN.md` | LogPick UI/UX 가이드 (Phase 3) |
 | `.cursorrules` | YOLO + M1 mps 규칙 |
