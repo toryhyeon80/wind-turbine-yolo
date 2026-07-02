@@ -9,7 +9,7 @@
 ### Train / Val 분할 결과
 
 <!-- report:auto:split -->
-- **자동 반영:** 2026-07-02 10:09:34 (`folder_scan`)
+- **자동 반영:** 2026-07-02 10:18:12 (`folder_scan`)
 
 | 항목 | 이미지 수 | 비율 |
 | :--------------- | ----------: | ----: |
@@ -52,7 +52,7 @@
 > 학습 전 데이터 특성 파악 — `python eda.py` 실행 후 `update_report.py` / `update_notion.py`로 자동 반영
 
 <!-- report:auto:eda -->
-- **자동 반영:** 2026-07-02 10:09:34
+- **자동 반영:** 2026-07-02 10:18:12
 - **총 BBox:** 9351개
 
 **클래스별 BBox 분포**
@@ -95,7 +95,7 @@
 - **최종 학습:** `train` | mAP50 **0.575** | mAP50-95 **0.319**
 - **재검증:** `val_final`
 - **Val 메트릭:** mAP50 **0.574** | Precision **0.597** | Recall **0.640**
-- **갱신 시각:** 2026-07-02 10:09:34
+- **갱신 시각:** 2026-07-02 10:18:12
 <!-- /report:auto:run-summary -->
 
 - **Baseline 한계:** 작은 크기의 Damage(손상) 객체를 배경과 혼동하여 놓치는(False Negative) 현상이 잦았음.
@@ -172,7 +172,7 @@
 - **정책 요약:** Early stopping + 도메인 증강 + Ultralytics 기본 weight decay(L2)로 **일반화를 확보**했습니다. YOLO 객체 탐지에서는 Dropout/L1 별도 설계가 표준이 아니며, mAP 추가 이득도 제한적입니다.
 - **학습 곡선:** Val Loss가 Train Loss와 함께 안정적으로 수렴 — **심각한 과적합 징후는 관찰되지 않음** (`runs/detect/train/results.png`).
 <!-- report:auto:metrics-visuals -->
-- **자동 반영:** 2026-07-02 10:09:34
+- **자동 반영:** 2026-07-02 10:18:12
 - **Val 재검증 (`val_final`):** mAP50 **0.574** | mAP50-95 **0.318** | Precision **0.597** | Recall **0.640**
 
 ![Loss/mAP 학습 곡선 (Train)](report/assets/metrics/results.png)
@@ -185,7 +185,7 @@
 ### 오탐·미탐 및 오류 패턴 분석
 
 <!-- report:auto:error-analysis -->
-- **자동 반영:** 2026-07-02 10:09:34 (`val_final` + `predict.py`)
+- **자동 반영:** 2026-07-02 10:18:12 (`val_final` + `predict.py`)
 
 **클래스별 Val 지표**
 

@@ -39,6 +39,7 @@ NOTION_API_VERSION = "2022-06-28"
 NOTION_FILE_UPLOAD_VERSION = "2025-09-03"
 ROOT = Path(__file__).resolve().parent
 DEFAULT_EDA_DIR = ROOT / "runs" / "eda"
+DEFAULT_RUNS_DETECT_DIR = ROOT / "runs" / "detect"
 IMAGE_MD_PATTERN = re.compile(r"^!\[(.*?)\]\((.+?)\)\s*$")
 HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
 BULLET_LINE_PATTERN = re.compile(r"^(\s*)[-*]\s+(.*)$")
@@ -64,8 +65,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         type=Path,
-        default=Path("runs"),
-        help="YOLO 학습 결과 루트 폴더 (기본: runs)",
+        default=DEFAULT_RUNS_DETECT_DIR,
+        help="YOLO detect 학습 결과 폴더 (기본: runs/detect)",
     )
     parser.add_argument(
         "--page-id",
@@ -99,15 +100,29 @@ def format_page_id(page_id: str) -> str:
     return f"{clean[:8]}-{clean[8:12]}-{clean[12:16]}-{clean[16:20]}-{clean[20:]}"
 
 
+def resolve_detect_runs_dir(runs_dir: Path) -> Path:
+    """runs/ 또는 runs/detect/ 모두 허용 — train/results.csv 기준 경로로 정규화."""
+    detect = runs_dir / "detect" if (runs_dir / "detect").is_dir() else runs_dir
+    return detect.resolve()
+
+
 def find_latest_results_csv(runs_dir: Path) -> Path | None:
-    if not runs_dir.exists():
+    """최종 모델 메트릭 — update_report.py와 동일하게 train/ 우선."""
+    detect_dir = resolve_detect_runs_dir(runs_dir)
+    preferred = detect_dir / "train" / "results.csv"
+    if preferred.is_file():
+        return preferred
+    if not detect_dir.exists():
         return None
-    candidates = sorted(
-        runs_dir.rglob("results.csv"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
+    skip_names = {"test_run", "val_final", "val_final-2"}
+    candidates = [
+        p
+        for p in detect_dir.rglob("results.csv")
+        if p.parent.name not in skip_names and not p.parent.name.startswith("exp")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 def _pick_metric(row: dict[str, str], *keys: str) -> float | None:
