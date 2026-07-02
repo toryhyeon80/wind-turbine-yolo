@@ -2,22 +2,35 @@
 
 > **용도:** Gamma AI 슬라이드 제작용 · **총 발표 시간 15분** (Live Demo 2분 포함)  
 > **슬라이드:** 18장 + 백업 2장  
-> **구성:** Phase 1 (ML) + Phase 2·3 (데모) + 심화 목표 + 마무리  
-> **Phase 1 상세:** `report.md` / Notion · **본 PPT:** 발표·데모·확장 중심
+> **구성 기준:** 심사 **IV. 평가 항목** 8가지에 맞춘 증빙·발표 흐름  
+> **상세 근거:** `report.md` · `TRAINING_CHECKLIST.md` · Notion
 
 ---
 
-## 시간 배분 요약
+## IV. 평가 항목 — 슬라이드·시간·증빙 매핑
 
-| 구간 | 슬라이드 | 시간 |
-|------|----------|------|
-| 도입 | 1~3 | 2분 |
-| 데이터·EDA | 4~6 | 3분 |
-| 모델·학습·실험 | 7~9 | 3분 |
-| 성능·평가 | 10~12 | 3분 |
-| **Live Demo** | 13~14 | **2.5분** |
-| 심화·로드맵 | 15~16 | 2.5분 |
-| 마무리 | 17~18 | 1.5분 |
+| # | 평가 항목 | 슬라이드 | 시간 | 핵심 증빙 |
+|:-:|---|:---:|:---:|---|
+| 1 | **데이터 EDA와 데이터 전처리가 적절하게 이뤄졌는가?** | 3~5 | 3분 | `eda.py`, `split_data.py`, 13,470장·배경 10,475장 |
+| 2 | **Task에 알맞게 적절한 모델(YOLO 계열 등)을 찾아보고 선정했는가?** | 6~7 | 2분 | YOLO11 채택, n vs s 실측 비교 |
+| 3 | **성능 향상을 위해 논리적으로 접근했는가?** | 8~9 | 2.5분 | EDA→Small·증강·`flipud=0` 설계 근거 |
+| 4 | **결과 도출을 위해 여러가지 시도를 진행했는가?** | 9~10 | 2분 | Baseline·**EXP1 실측**·EXP2~3·과적합 |
+| 5 | **도출된 결론에 충분한 설득력이 있는가?** | 11~12 | 2분 | +3.7%p, FN 866 분석, 한계 명시 |
+| 6 | **적절한 metric을 설정하고 그 사용 근거 및 결과를 분석하였는가?** | 11~12 | (5번과 통합) | mAP50·P/R·혼동행렬·클래스별 분석 |
+| 7 | **탐지를 넘어 실제 서비스/데모로 발전시키려는 시도가 있었는가?** | 13~15 | 3분 | FastAPI · Streamlit Live Demo |
+| 8 | **발표가 매끄럽게 진행되었고 발표시간을 준수하였는가?** | 전체 | 15분 | [발표 리허설](#발표-리허설-15분) 체크리스트 |
+
+### 시간 배분 요약
+
+| 구간 | 평가 항목 | 슬라이드 | 시간 |
+|------|-----------|----------|------|
+| 도입 | — | 1~2 | 1.5분 |
+| **① EDA·전처리** | #1 | 3~5 | 3분 |
+| **② 모델 선정** | #2 | 6~7 | 2분 |
+| **③④ 논리·시도** | #3, #4 | 8~10 | 4.5분 |
+| **⑤⑥ 결론·Metric** | #5, #6 | 11~12 | 2분 |
+| **⑦ 서비스/데모** | #7 | 13~15 | 3분 |
+| 마무리 | — | 16~18 | 1.5분 |
 
 ---
 
@@ -37,26 +50,14 @@
 
 ---
 
-## Slide 2 · 문제 정의 & 배경 (0:45)
+## Slide 2 · 문제 정의 & 파이프라인 (1:00)
 
-**제목:** 왜 필요한가? — 예방 정비의 과제
+**제목:** 왜 필요한가? — 예방 정비와 End-to-End 파이프라인
 
 **Bullet**
 - 풍력 블레이드 **표면 결함** → 효율 저하·안전 리스크
 - 드론 점검 → **수만 장** 이미지 · **육안 검수** 한계
-- 필요: **자동 BBox 탐지** → 1차 스크린닝 → 검수자 확인
-
-**목표 (한 줄)**
-> Dirt(0) + Damage(1) **2클래스 객체 탐지** (YOLO11)
-
-**발표 멘트**
-> 점검 이미지가 많고 Damage는 **매우 작게** 나타나 탐지가 어렵습니다. YOLO로 **1차 자동 탐지** 후 사람이 확인하는 워크플로를 목표로 했습니다.
-
----
-
-## Slide 3 · 프로젝트 파이프라인 (1:00)
-
-**제목:** 전체 아키텍처 — Phase 1 → 2 → 3
+- 목표: Dirt(0) + Damage(1) **2클래스 BBox 탐지** → 1차 스크린닝 → 검수자 확인
 
 **다이어그램**
 
@@ -72,18 +73,16 @@
 [자동화] report.md · Notion 동기화
 ```
 
-**환경**
-- Apple M1 Pro · **device=mps**
-- 클래스: **dirt(0), damage(1)**
-
 **발표 멘트**
-> 데이터 분할부터 학습·검증·추론, API·웹 데모, 리포트 자동화까지 **End-to-End 파이프라인**을 구축했습니다.
+> 점검 이미지가 많고 Damage는 **매우 작게** 나타납니다. 데이터부터 데모·리포트 자동화까지 **End-to-End**로 구축했습니다.
 
 ---
 
-## Slide 4 · 데이터셋 (1:00)
+## Slide 3 · 데이터셋 구축 & 전처리 (1:00)
 
-**제목:** 데이터셋 구축 — 13,470장
+> **평가 항목 ①** 데이터 EDA와 데이터 전처리가 적절하게 이뤄졌는가?
+
+**제목:** 데이터셋 구축 — 13,470장 · Train/Val 분할
 
 **표**
 
@@ -93,26 +92,26 @@
 | Train | 10,776 | 80% |
 | Val | 2,694 | 20% |
 
-**구성**
+**전처리**
 
 | 구분 | Train | Val | 합계 |
 |------|------:|----:|-----:|
 | 라벨 있음 (BBox) | 2,401 | 594 | 2,995 |
 | **배경** (negative) | 8,375 | 2,100 | 10,475 |
 
-**Bullet**
-- 드론 촬영 + YOLO 형식 라벨 · `split_data.py` (seed=42)
-- **배경 이미지** 포함 → 오탐 억제 학습
-- **Test 세트:** 미구축 → **Val 기준** 평가 (한계 명시)
-
-**캡처 제안:** `runs/eda/class_distribution.png`
+**증빙**
+- `split_data.py` (seed=42) · stem 기준 이미지–라벨 1:1 매칭
+- YOLO 형식 라벨 · `imgsz=640` 리사이즈 (Ultralytics 자동)
+- **Test 미구축** → Val 기준 평가 (한계 명시)
 
 **발표 멘트**
-> 1만 3천 장 규모이며, **배경 1만 장**을 넣어 ‘아무것도 없는 이미지’도 학습했습니다. Test는 일정상 Val로 평가했고, **향후 Test 분리**가 과제입니다.
+> 1만 3천 장을 8:2로 분할했고, **배경 1만 장**을 넣어 오탐 억제 학습을 했습니다. 전처리·분할은 스크립트로 재현 가능합니다.
 
 ---
 
-## Slide 5 · EDA 인사이트 (1:00)
+## Slide 4 · EDA (1:00)
+
+> **평가 항목 ①** (계속)
 
 **제목:** EDA — 데이터가 모델 설계를 이끈다
 
@@ -121,112 +120,171 @@
 - **Dirt : Damage ≈ 1 : 15** (581 vs 8,770)
 - Damage BBox **93.3%** 극소형 (w,h < 0.2)
 
-**설계 반영**
-
-| EDA | 모델/학습 결策 |
-|-----|----------------|
-| 극소형 Damage | YOLO11 **Small**, mosaic 유지 |
-| 클래스 불균형 | 도메인 증강, 2클래스 유지 |
-| 블레이드 방향 | **flipud=0** (상하 반전 금지) |
-
-**캡처 제안:** `runs/eda/bbox_size_distribution.png`, `class_distribution.png`
+**캡처 제안:** `runs/eda/class_distribution.png`, `bbox_size_distribution.png`
 
 **발표 멘트**
-> Damage가 **극소형·다수**라 Nano보다 **Small**이 필요하고, 풍력 도메인 특성상 **상하 반전 증강은 금지**했습니다.
+> EDA로 **클래스 불균형**과 **극소형 Damage**를 확인했습니다. 이 인사이트가 이후 모델·증강 설계의 출발점이 됩니다.
 
 ---
 
-## Slide 6 · 모델 선정 (0:45)
+## Slide 5 · EDA → 설계 반영 (1:00)
 
-**제목:** Task에 맞는 모델 — YOLO11
+> **평가 항목 ①** (계속) · **평가 항목 ③** 선행 연결
 
-**Bullet**
-- **과제:** 객체 탐지 (Bounding Box)
-- **선정:** Ultralytics **YOLO11** (표준·MPS 지원·실시간)
+**제목:** EDA 인사이트 → 전처리·학습 설계
 
-**후보 비교 (실측)**
+| EDA 발견 | 설계 반영 |
+|----------|-----------|
+| Damage 93% 극소형 | YOLO11 **Small** 채택 검토 |
+| Dirt : Damage = 1:15 | 도메인 증강·2클래스 유지 |
+| 블레이드 상하 방향성 | **`flipud=0`** (상하 반전 금지) |
+| 배경 이미지 다수 | negative 샘플로 오탐 억제 |
 
-| 모델 | mAP50 | 특징 |
-|------|-------|------|
-| YOLO11n (Baseline) | **0.538** | 경량·엣지 |
-| YOLO11s (최종) | **0.575** | **+3.7%p** · 채택 |
+**증빙:** `eda.py` → `runs/eda/` → `update_report.py` 자동 반영
 
 **발표 멘트**
-> 객체 탐지 표준인 YOLO11을 썼고, **Nano vs Small을 실제 학습·비교**해 Small을 채택했습니다.
+> EDA 결과를 **그냥 보고서에만 넣지 않고**, 모델 크기·증강·분할 정책에 **직접 반영**했습니다.
 
 ---
 
-## Slide 7 · 학습 설계 & 하이퍼파라미터 (1:00)
+## Slide 6 · 모델 선정 — YOLO11 (1:00)
 
-**제목:** 학습 설정 — 도메인 맞춤 + 튜닝
+> **평가 항목 ②** Task에 알맞게 적절한 모델(YOLO 계열 등)을 찾아보고 선정했는가?
 
-**표 (`configs/train.yaml`)**
+**제목:** Task에 맞는 모델 — 왜 YOLO11인가?
+
+**과제 특성**
+- **객체 탐지** (Bounding Box) — 위치·범위 필요
+- 대량 드론 이미지 → **추론 속도**·배포 편의성 중요
+
+**후보 검토 (문헌·Task 요구사항)**
+
+| 후보 | 판단 |
+|------|------|
+| Faster R-CNN | 정밀도 높으나 속도·배포 부담 → 제외 |
+| RetinaNet | 소형 객체 대응, 파이프라인 복잡 → 제외 |
+| **YOLO11 (Ultralytics)** | One-Stage · MPS 지원 · Train/Val/Predict 일원화 → **채택** |
+
+**발표 멘트**
+> BBox 탐지·대량 이미지·현장 배포를 고려해 **YOLO11**을 선정했습니다. Two-Stage는 정밀하지만 점검 파이프라인에 부담이 큽니다.
+
+---
+
+## Slide 7 · Baseline 비교 — Nano vs Small (1:00)
+
+> **평가 항목 ②** (계속)
+
+**제목:** 모델 선정 검증 — YOLO11n vs YOLO11s 실측
+
+| 모델 | Epoch | mAP50 | mAP50-95 | 설정 |
+|------|------:|------:|---------:|------|
+| YOLO11n (Baseline) | 18 | **0.538** | 0.317 | `train_baseline.yaml` |
+| YOLO11s (최종) | 50 | **0.575** | 0.319 | `train.yaml` |
+
+- **개선:** mAP50 **+3.7%p**
+- **근거:** EDA 극소형 Damage → Nano 한계 → Small 스케일업
+
+**캡처 제안:** Baseline vs 최종 mAP50 막대 그래프
+
+**발표 멘트**
+> 문헌 검토만이 아니라 **Baseline을 실제 학습·비교**해 Small 채택을 정량적으로 뒷받침했습니다.
+
+---
+
+## Slide 8 · 논리적 성능 향상 접근 (1:15)
+
+> **평가 항목 ③** 성능 향상을 위해 논리적으로 접근했는가?
+
+**제목:** 성능 향상 논리 — EDA → EXP 설계
+
+**3단계 누적 설계 (EXP 1~3)**
+
+| 단계 | 변경 | 논리적 근거 |
+|------|------|-------------|
+| **EXP 1** | Nano → **Small** | 극소형 Damage 탐지 능력 확보 |
+| **EXP 2** | HSV · Mosaic · Mixup · Erasing | 조명·각도·배경 다양성 |
+| **EXP 3** | 50ep · batch 8 · patience 10 | M1 OOM 대응·수렴 안정화 |
+
+**도메인 규칙:** `flipud=0` · `close_mosaic: 10` · Cosine LR · Pretrained YOLO11
+
+**하이퍼파라미터 (`configs/train.yaml`)**
 
 | 항목 | 값 | 근거 |
 |------|-----|------|
-| Epoch | 50 | 수렴 확인 |
-| Batch | 8 | M1 16GB OOM 방지 |
+| Batch | 8 | M1 16GB OOM (32→스왑) |
 | imgsz | 640 | 속도·메모리 균형 |
-| patience | 10 | Early stopping |
-| LR | Cosine + warmup | 안정 수렴 |
-| device | **mps** | M1 GPU |
-
-**증강 (EXP 2)**
-- HSV · Mosaic · Mixup · Erasing · **flipud=0**
+| device | **mps** | M1 GPU 가속 |
 
 **발표 멘트**
-> 하이퍼파라미터는 YAML로 관리했고, batch 32는 **스왑**이 나와 **8**로 고정했습니다.
+> “일단 학습”이 아니라 **EDA → 가설 → YAML 설정** 순으로 논리적으로 접근했습니다.
 
 ---
 
-## Slide 8 · 실험 로그 EXP 1~3 (1:00)
+## Slide 9 · 다양한 시도 — 실험 로그 (1:15)
 
-**제목:** 성능 개선 — Baseline → 최종 (3단계 설계)
+> **평가 항목 ④** 결과 도출을 위해 여러가지 시도를 진행했는가?
 
-**표**
+**제목:** 실험 시도 — Baseline · EXP · 과적합 방지
 
-| 단계 | 변경 | mAP50 | 비고 |
-|------|------|-------|------|
-| **Baseline** | YOLO11n + min aug | **0.538** | 실측 |
-| EXP1 | Nano→**Small** | (설계) | +스케일 |
-| EXP2 | **도메인 증강** | (설계) | HSV·Mosaic |
-| EXP3 | Epoch/Batch 튜닝 | (설계) | 50ep·batch8 |
-| **최종** | 통합 | **0.575** | **+3.7%p** |
+| 시도 | 내용 | 결과/상태 |
+|------|------|-----------|
+| Baseline 학습 | YOLO11n + 최소 증강 · 20ep | mAP50 **0.538** (ep 18) |
+| **EXP1** | YOLO11s + 최소 증강 · 20ep (독립 ablation) | mAP50 **0.498** (ep 19) ✅ |
+| EXP2~3 통합 | 도메인 증강 + 50ep (`train.yaml`) | mAP50 **0.575** |
+| 과적합 방지 | Aug · Early stop · Cosine LR · L2 | Val Loss 동반 수렴 |
+| 추론 파이프라인 | `predict.py` Val 2,694장 일괄 | JSON 산출 검증 |
+
+**EXP1 해석**
+- 동일 조건(20ep·min aug)에서 **Small(0.498) < Nano(0.538)** → 모델 스케일업만으로는 부족
+- **EXP2(증강) + EXP3(50ep)** 통합 후 **+3.7%p** 달성
 
 **한계**
-- EXP별 독립 ablation 일부 미수행
-- **EXP1 20ep** (`exp1_small_minaug`) 밤새 학습 진행 가능 — 결과 있으면 발표에 1줄 추가
+- EXP2·3은 별도 독립 run 없이 최종 설정에 누적 반영
 
-**캡처 제안:** `runs/detect/train/results.png`
+**캡처 제안:** `runs/detect/exp1_small_minaug/results.png`, `train/results.png`
 
 **발표 멘트**
-> Baseline 대비 **3.7%p** 개선이 핵심 근거이고, EXP1~3은 **누적 설계**로 문서화했습니다.
+> EXP1을 **독립 실험**으로 돌려 Small만 바꿨을 때는 Baseline보다 낮았습니다. 증강·장기 학습이 핵심이라는 **근거**가 생겼습니다.
 
 ---
 
-## Slide 9 · 과적합 방지 (0:45)
+## Slide 10 · 과적합 모니터링 (0:45)
 
-**제목:** 일반화 — Regularization
+> **평가 항목 ④** (계속)
+
+**제목:** 일반화 — Train/Val 동시 모니터링
 
 **적용 ✅**
-- Data Augmentation · Early stopping · Cosine LR · L2 (weight_decay)
-- Pretrained YOLO11 · `close_mosaic: 10`
+- Data Augmentation · Early stopping (patience 10) · Cosine LR
+- Pretrained YOLO11 · `close_mosaic: 10` · weight_decay 0.0005
 
-**미적용 (의도)**
-- Dropout · L1 — YOLO 탐지 표준 관행
+**관찰**
+- Train/Val Loss **함께 수렴** — 심각한 과적합 미관찰
 
-**캡처 제안:** Train/Val Loss 함께 수렴 (`results.png`)
+**캡처 제안:** `results.png` (Train/Val Loss 곡선)
 
 **발표 멘트**
-> Val Loss가 Train과 함께 수렴해 **심각한 과적합은 관찰되지 않았**습니다.
+> 매 Epoch Val mAP·Loss를 기록했고, 곡선으로 **일반화 상태**를 확인했습니다.
 
 ---
 
-## Slide 10 · 최종 성능 (1:00)
+## Slide 11 · Metric 선정 & 최종 성능 (1:00)
 
-**제목:** Validation 최종 성능
+> **평가 항목 ⑥** 적절한 metric을 설정하고 그 사용 근거 및 결과를 분석하였는가?
 
-**표 (Val — `val_final`)**
+**제목:** 평가 지표 — 선정 근거와 Val 결과
+
+**지표 선정 근거**
+
+| 지표 | 선정 이유 |
+|------|-----------|
+| **Recall** | 손상 **미탐 최소화** (안전 최우선) |
+| **Precision** | **오탐 최소화** (불필요 정비 방지) |
+| **mAP50** | IoU 0.5 기준 종합 탐지 성능 |
+| **mAP50-95** | BBox **위치 정밀도** |
+| **혼동행렬** | FN/FP 패턴 분석 |
+
+**Val 최종 성능 (`val_final`)**
 
 | 지표 | 값 |
 |------|-----|
@@ -235,72 +293,51 @@
 | **Precision** | **0.597** |
 | **Recall** | **0.640** |
 
-**Baseline vs 최종**
-- 0.538 → **0.575** (train best) / **0.574** (val 재검증) = **+3.7%p**
-
-**주의**
-> 모든 수치는 **Validation set** 기준 (Test 미구축)
+**주의:** 모든 수치 **Validation set** 기준 (Test 미구축)
 
 **캡처 제안:** `confusion_matrix.png`, `BoxF1_curve.png`
 
 **발표 멘트**
-> Val 기준 mAP50 **0.574**, Recall **0.64**입니다. Test가 없어 **일반화 성능은 보수적으로** 해석해야 합니다.
+> 안전 관점에서 Recall을 최우선으로 두었고, mAP·P/R·혼동행렬로 **정량·정성** 모두 분석했습니다.
 
 ---
 
-## Slide 11 · 클래스별 · FP/FN (1:00)
+## Slide 12 · 오류 분석 & 설득력 있는 결론 (1:00)
 
-**제목:** 오류 분석 — 어디가 약한가?
+> **평가 항목 ⑤** 도출된 결론에 충분한 설득력이 있는가?  
+> **평가 항목 ⑥** (계속)
 
-**클래스별**
+**제목:** 결론 — 개선은 있으나, 병목은 명확하다
 
-| 클래스 | P | R | mAP50 |
-|--------|------|------|-------|
-| Dirt | 0.521 | **0.750** | 0.549 |
-| Damage | **0.673** | 0.530 | 0.599 |
+**정량 결론**
+- Baseline 0.538 → 최종 **0.575** (**+3.7%p**) — Small·증강 효과 **입증**
+- Dirt ↔ Damage 혼동 **7건** — 클래스 구분은 양호
 
-**혼동행렬 핵심**
+**핵심 병목 (정직한 결론)**
 
-| 패턴 | 건수 |
-|------|------|
-| **Damage → Background (FN)** | **866** ← 핵심 |
-| Background → Damage (FP) | 323 |
-| Dirt ↔ Damage | **7** (낮음) |
+| 클래스 | Recall | 이슈 |
+|--------|--------|------|
+| Dirt | **0.750** | 상대적 양호 |
+| Damage | **0.530** | **FN 866건** — 극소형 Damage 미탐 |
 
-**캡처 제안:** `runs/detect/val_final/val_batch0_pred.jpg`
+**향후 개선 (EDA·오류 분석 근거)**
+- conf 조정 · 소형 객체 증강 · imgsz 1024 · SAHI 검토
 
-**발표 멘트**
-> 클래스 혼동은 적지만 **Damage 미탐**이 866건으로 가장 큰 이슈입니다. **소형 Damage**와 연결됩니다.
-
----
-
-## Slide 12 · 추론 파이프라인 (0:45)
-
-**제목:** Phase 1 Test — predict.py
-
-**집계 (Val 2,694장)**
-
-| 항목 | 값 |
-|------|-----|
-| 처리 이미지 | 2,694 |
-| 탐지 있는 이미지 | 505 (18.7%) |
-| 총 BBox | 1,294 |
-
-**역할**
-- `best.pt` 일괄 추론 · JSON 산출
-- 공식 `val.py` 평가와 별도 **파이프라인 검증**
+**캡처 제안:** `val_batch0_pred.jpg`, FN 대표 사례
 
 **발표 멘트**
-> 학습 후 **Val 전체**에 추론 파이프라인을 검증했고, JSON으로 결과를 저장합니다.
+> 성능 개선은 **수치로 증명**했고, Damage FN 866건은 **EDA의 극소형 인사이트와 연결**해 설명합니다. 과장 없이 한계도 함께 말합니다.
 
 ---
 
 ## Slide 13 · Live Demo 소개 (0:30)
 
-**제목:** 🎬 Live Demo — Streamlit 웹 데모
+> **평가 항목 ⑦** 탐지를 넘어 실제 서비스/데모로 발전시키려는 시도가 있었는가?
+
+**제목:** 🎬 Live Demo — 탐지 → 서비스/데모
 
 **전환 멘트**
-> 이제 **코드 없이** 이미지를 올려 탐지하는 **웹 데모**를 보여드리겠습니다.
+> 모델 학습을 넘어 **실제 서비스 형태**로 확장했습니다. **코드 없이** 이미지를 올려 탐지하는 웹 데모를 보여드리겠습니다.
 
 **실행**
 ```bash
@@ -308,11 +345,11 @@ python3 -m streamlit run app.py
 ```
 → http://localhost:8501
 
-*(슬라이드는 최소 텍스트 — 데모용)*
-
 ---
 
 ## Slide 14 · Live Demo 시연 (2:00)
+
+> **평가 항목 ⑦** (계속)
 
 **시연 스크립트**
 
@@ -320,29 +357,26 @@ python3 -m streamlit run app.py
 2. Confidence **0.25** 확인
 3. **「결함 탐지 실행」** 클릭
 4. **좌 원본 / 우 BBox** + Dirt·Damage **카운트** 설명
-5. (15초) Confidence **0.15**로 낮춰 “Recall↑ · FP↑” 한 줄
+5. (15초) Confidence **0.15**로 낮춰 “Recall↑ · FP↑” trade-off 설명
 
 **발표 멘트**
-> 업로드만으로 **Dirt·Damage**가 표시됩니다. 임계값을 조절하면 **미탐 vs 오탐** trade-off를 현장에서 조정할 수 있습니다. 이게 **「탐지 → 서비스/데모」** 로의 확장입니다.
+> 업로드만으로 **Dirt·Damage**가 표시됩니다. 임계값 조절로 **미탐 vs 오탐**을 현장에서 조정할 수 있습니다.
 
-**데모 실패 대비:** Slide 11 예측 이미지 캡처 백업
+**데모 실패 대비:** Slide 12 예측 이미지 캡처 백업
 
 ---
 
-## Slide 15 · Phase 2 API + 제품화 (1:15)
+## Slide 15 · API & 제품화 로드맵 (0:30)
 
-**제목:** 서비스 확장 — API & 제품화 로드맵
+> **평가 항목 ⑦** (계속)
+
+**제목:** Phase 2 API — B2B 연동 기반
 
 **Phase 2 ✅**
 
 ```
 POST /api/v1/predict  →  JSON (BBox · class · summary)
 Swagger: http://localhost:8000/docs
-```
-
-**실행**
-```bash
-python3 -m uvicorn backend.main:app --reload --port 8000
 ```
 
 **제품화 로드맵**
@@ -352,63 +386,48 @@ python3 -m uvicorn backend.main:app --reload --port 8000
 | **MVP** | FastAPI + Streamlit | ✅ |
 | 단기 | Next.js 대시보드 · 검사 이력 · PDF 리포트 | 🔜 |
 | 중기 | 드론 **엣지** 실시간 추론 · GPS 매핑 | 🔜 |
-| 장기 | **검수자 피드백** · LogPick형 **예방 정비 SaaS** | 🔜 |
+| 장기 | 검수자 피드백 · **예방 정비 SaaS** | 🔜 |
 
 **발표 멘트**
-> 데모 UI 뒤에는 **REST API**가 있어 B2B·모바일·드론과 연동 가능합니다. LogPick형 **예방 정비 SaaS**로 단계 확장할 계획입니다.
+> 데모 UI 뒤에는 **REST API**가 있어 B2B·모바일·드론과 연동 가능합니다.
 
 ---
 
-## Slide 16 · 심화 목표 (도전) (1:15)
+## Slide 16 · 심화 목표 & 데이터 로드맵 (0:45)
 
-**제목:** 심화 목표 (도전)
+**제목:** 향후 과제 — EDA·오류 분석 기반
 
-### ① 제품화를 한다면?
-- **완료:** FastAPI + Streamlit MVP
-- **로드맵:** Next.js · 검사 이력 · 엣지 추론 · 검수 피드백 SaaS
-
-### ② 다른 모델 성능은?
-
-| | 내용 |
-|---|------|
-| **완료** | YOLO11n vs s **실측** (+3.7%p) |
-| **향후** | m/l · imgsz 1024 · **SAHI** (소형 Damage) |
-
-### ③ 추가로 데이터를 수집?
-
-| 이슈 | 수집 방향 |
-|------|-----------|
-| 극소형 Damage 93% | 고해상도·근접 촬영 |
+| 이슈 | 로드맵 |
+|------|--------|
+| 극소형 Damage 93% | 고해상도·SAHI |
+| Damage FN 866 | conf·소형 객체 증강 |
+| Test 없음 | Hold-out Test 구축 |
 | Dirt 부족 (15:1) | Dirt 라벨 보강 |
-| FN 866 | 안개·역광 도메인 |
-| Test 없음 | **Hold-out Test** 구축 |
-| 영상 10초 | **라벨링 후** 단계 반영 (단순 추가 X) |
 
 **발표 멘트**
-> 모델·데이터 모두 **EDA와 오류 분석에 근거**한 로드맵입니다.
+> 한계와 로드맵 모두 **EDA·혼동행렬 근거**에 연결했습니다.
 
 ---
 
-## Slide 17 · 한계 & 향후 (0:45)
+## Slide 17 · 한계 & Lessons Learned (0:45)
 
-**제목:** 한계 & Lessons Learned
+**제목:** 한계 & 강점 요약
 
 **한계**
 - Test 세트 없음 → Val 기준 평가
 - Damage **미탐(FN)** 다수 (소형 객체)
-- EXP 독립 ablation 일부 미완
+- EXP2·3은 별도 독립 run 없이 최종 설정에 누적 반영 (EXP1 ablation은 완료)
 
-**강점**
-- **13K** 데이터 · End-to-End 파이프라인
-- Baseline **정량 비교** · Notion 자동 리포트
-- **웹 데모 + API** (평가: 서비스/데모 시도)
+**강점 (평가 항목 대응)**
+- ① EDA→설계 반영 · ② YOLO11 실측 비교 · ③④ 논리적 EXP
+- ⑤⑥ 정량+오류 분석 · ⑦ **웹 데모+API**
 
 **발표 멘트**
-> 완벽한 Test 성능보다 **파이프라인 완주 + 데모 + 분석**에 무게를 뒀습니다.
+> 완벽한 Test 성능보다 **파이프라인 완주 + 분석 + 데모**에 무게를 뒀습니다.
 
 ---
 
-## Slide 18 · 마무리 (0:45)
+## Slide 18 · 마무리 (0:30)
 
 **제목:** Thank You
 
@@ -427,47 +446,47 @@ python3 -m uvicorn backend.main:app --reload --port 8000
 
 ---
 
-## 백업 Slide B1 · 평가 항목 매핑
+## 백업 Slide B1 · 평가 항목 체크리스트 (심사용)
 
-| 평가 항목 | 우리 슬라이드 |
-|-----------|----------------|
-| EDA·전처리 | 4~5 |
-| 적절한 모델 | 6 |
-| 논리적 성능 향상 | 7~8 |
-| 여러 시도 | 8~9 |
-| 설득력 있는 결론 | 10~11 |
-| Metric 분석 | 10~11 |
-| **서비스/데모** | **13~15** |
-| 발표 매끄러움 | Live Demo 리허설 |
+| # | 평가 항목 | 우리 답변 (한 줄) | 증빙 파일 |
+|:-:|---|---|---|
+| 1 | EDA·전처리 | 13,470장 분할·EDA 3종 시각화·`flipud=0` | `eda.py`, `split_data.py` |
+| 2 | 모델 선정 | YOLO11 채택, n vs s **+3.7%p** 실측 | `train_baseline.yaml`, `train.yaml` |
+| 3 | 논리적 접근 | EDA→Small·증강·배치 튜닝 근거 문서화 | `report.md` §3 |
+| 4 | 여러 시도 | Baseline·EXP1~3·과적합·predict 파이프라인 | `runs/detect/` |
+| 5 | 설득력 있는 결론 | 개선 입증 + FN 866·Test 한계 명시 | `val_final/` |
+| 6 | Metric 분석 | mAP·P/R·혼동행렬·클래스별 분석 | `val_metrics.yaml` |
+| 7 | 서비스/데모 | FastAPI + Streamlit MVP | `app.py`, `backend/` |
+| 8 | 발표 매끄러움 | 15분 리허설 · Demo 백업 슬라이드 | 본 문서 하단 |
 
 ---
 
-## 백업 Slide B2 · EXP1 / 추가 그래프
+## 백업 Slide B2 · EXP1 그래프
 
-- EXP1 `runs/detect/exp1_small_minaug` 결과 (있으면 mAP50 추가)
-- Notion 리포트 스크린샷
+- `runs/detect/exp1_small_minaug/results.png` — EXP1 학습 곡선
+- **EXP1 best:** mAP50 **0.498** (ep 19) vs Baseline **0.538** vs 최종 **0.575**
 
 ---
 
 ## 캡처·그래프 체크리스트
 
-| # | 자산 | 슬라이드 |
-|---|------|----------|
-| 1 | `runs/eda/class_distribution.png` | 5 |
-| 2 | `runs/eda/bbox_size_distribution.png` | 5 |
-| 3 | `runs/detect/train/results.png` | 8~9 |
-| 4 | Baseline vs 최종 mAP50 막대 (0.538 vs 0.574) | 6, 10 |
-| 5 | `runs/detect/val_final/confusion_matrix.png` | 11 |
-| 6 | `runs/detect/val_final/val_batch0_pred.jpg` | 11 |
-| 7 | **Streamlit 탐지 완료** 화면 캡처 | 13~14 |
-| 8 | FastAPI Swagger `/docs` (선택) | 15 |
-| 9 | 파이프라인 다이어그램 | 3 |
+| # | 자산 | 슬라이드 | 평가 항목 |
+|---|------|----------|-----------|
+| 1 | `runs/eda/class_distribution.png` | 4 | ① |
+| 2 | `runs/eda/bbox_size_distribution.png` | 4~5 | ① |
+| 3 | Baseline vs 최종 mAP50 막대 (0.538 vs 0.574) | 7, 11 | ② |
+| 4 | `runs/detect/train/results.png` | 9~10 | ③④ |
+| 5 | `runs/detect/val_final/confusion_matrix.png` | 11~12 | ⑤⑥ |
+| 6 | `runs/detect/val_final/val_batch0_pred.jpg` | 12 | ⑤⑥ |
+| 7 | **Streamlit 탐지 완료** 화면 캡처 | 13~14 | ⑦ |
+| 8 | FastAPI Swagger `/docs` (선택) | 15 | ⑦ |
+| 9 | 파이프라인 다이어그램 | 2 | — |
 
 ---
 
 ## Gamma AI 사용 팁
 
-1. **입력:** 이 파일 전체 또는 `## Slide N` 단위로 붙여넣기
+1. **입력:** `## Slide N` 단위로 붙여넣기 — 각 슬라이드 상단 **평가 항목** 주석 참고
 2. **테마:** B2B·테크 — Navy `#1E3A5F` · Teal `#0D9488` (`DESIGN.md` LogPick)
 3. **슬라이드 수:** 18~20장 목표
 4. **이미지:** 위 체크리스트 경로에서 캡처 후 Gamma에 수동 삽입
@@ -477,22 +496,37 @@ python3 -m uvicorn backend.main:app --reload --port 8000
 
 ## 발표 리허설 (15분)
 
-1. **Live Demo 2분** — 실패 시 Slide 11 캡처로 대체
-2. **숫자 3개:** 13,470장 · mAP50 **0.574** · **+3.7%p**
-3. **한계 1문장:** Val 기준, Test·Damage FN은 향후 과제
-4. 발표 전 실행:
-   - `python3 -m streamlit run app.py`
-   - (선택) `python3 -m uvicorn backend.main:app --port 8000`
+> **평가 항목 ⑧** 발표가 매끄럽게 진행되었고 발표시간을 준수하였는가?
+
+### 시간 체크 (발표 전 2회 이상 연습)
+
+| 구간 | 목표 시간 | 누적 |
+|------|----------|------|
+| Slide 1~2 | 1.5분 | 1.5분 |
+| Slide 3~5 (① EDA) | 3분 | 4.5분 |
+| Slide 6~7 (② 모델) | 2분 | 6.5분 |
+| Slide 8~10 (③④ 시도) | 4.5분 | 11분 |
+| Slide 11~12 (⑤⑥ Metric) | 2분 | 13분 |
+| Slide 13~15 (⑦ 데모) | 3분 | 16분 → **Demo 2분으로 조절** |
+| Slide 16~18 | 1.5분 | **15분** |
+
+### 리허설 체크리스트
+
+- [ ] **15분 이내** 완료 (Q&A 제외)
+- [ ] Live Demo **2분** 이내 — 실패 시 Slide 12 캡처로 대체
+- [ ] 숫자 3개 암기: **13,470장** · mAP50 **0.574** · **+3.7%p**
+- [ ] 한계 1문장: Val 기준, Damage FN·Test는 향후 과제
+- [ ] 평가 항목 **7번(데모)** 반드시 시연 또는 캡처 대체
+- [ ] 발표 전 실행 확인:
+  ```bash
+  python3 -m streamlit run app.py
+  python3 -m uvicorn backend.main:app --port 8000  # 선택
+  ```
 
 ---
 
-## EXP1 밤새 학습 (선택)
-
-```bash
-cd ~/wind-turbine-yolo
-nohup python3 train.py --config configs/train_exp1_small_minaug.yaml --no-report > exp1_train.log 2>&1 &
-```
+## EXP1 학습 (완료)
 
 - 설정: `configs/train_exp1_small_minaug.yaml`
 - 산출: `runs/detect/exp1_small_minaug/`
-- 아침 결과 있으면 Slide 8·B2에 mAP50 1줄 추가
+- **결과:** best mAP50 **0.498** (epoch 19) · 20ep 완료

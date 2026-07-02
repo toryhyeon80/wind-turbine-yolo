@@ -9,7 +9,7 @@
 ### Train / Val 분할 결과
 
 <!-- report:auto:split -->
-- **자동 반영:** 2026-07-02 10:18:12 (`folder_scan`)
+- **자동 반영:** 2026-07-02 17:26:07 (`folder_scan`)
 
 | 항목 | 이미지 수 | 비율 |
 | :--------------- | ----------: | ----: |
@@ -52,7 +52,7 @@
 > 학습 전 데이터 특성 파악 — `python eda.py` 실행 후 `update_report.py` / `update_notion.py`로 자동 반영
 
 <!-- report:auto:eda -->
-- **자동 반영:** 2026-07-02 10:18:12
+- **자동 반영:** 2026-07-02 17:26:07
 - **총 BBox:** 9351개
 
 **클래스별 BBox 분포**
@@ -95,7 +95,7 @@
 - **최종 학습:** `train` | mAP50 **0.575** | mAP50-95 **0.319**
 - **재검증:** `val_final`
 - **Val 메트릭:** mAP50 **0.574** | Precision **0.597** | Recall **0.640**
-- **갱신 시각:** 2026-07-02 10:18:12
+- **갱신 시각:** 2026-07-02 17:26:07
 <!-- /report:auto:run-summary -->
 
 - **Baseline 한계:** 작은 크기의 Damage(손상) 객체를 배경과 혼동하여 놓치는(False Negative) 현상이 잦았음.
@@ -117,25 +117,26 @@
 | 실험 | 모델 | Epoch | mAP50 | mAP50-95 | 비고 |
 | :--- | :--- | ---: | ---: | ---: | :--- |
 | **Baseline** | YOLO11n (Nano) | 18 | 0.538 | 0.317 | YOLO11n · 최소 증강 |
+| **EXP 1** | YOLO11s (Small) | 19 | 0.498 | 0.288 | Small만 변경·20ep (`train_exp1_small_minaug.yaml`) |
 | **최종 모델** | YOLO11s (Small) | 50 | 0.575 | 0.319 | EXP 1~3 통합 (`configs/train.yaml`) |
-| **개선** | — | — | **+ 3.7%p** | + 0.2%p | Baseline 대비 |
+| **개선** | — | — | **+ 3.7%p** | + 0.2%p | Baseline 대비 (최종) |
 <!-- /report:auto:exp-comparison -->
 
 <!-- report:auto:hyper-tuning -->
-**EXP 1~3은 누적 설계 단계** — 아래는 실측 비교(Baseline vs 최종)와 함께 기록한 결정 근거입니다.
+**EXP 1~3은 누적 설계 단계** — EXP1은 독립 ablation 완료, EXP2·3은 최종 모델에 통합 반영.
 
 | 단계 | 변경 | 선택 | 근거 |
 | :--- | :--- | :--- | :--- |
-| **EXP 1** | 모델 크기 | Nano → **Small** | Baseline mAP50 0.538 → 최종 0.575 (+3.7%p) |
+| **EXP 1** | 모델 크기 | Nano → **Small** | EXP1 단독(20ep·min aug) mAP50 **0.498** — Small만으로는 Baseline(**0.538**) 미달 → EXP2·3 필요 |
 | **EXP 2** | Data Augmentation | HSV·Mosaic·Mixup·Erasing | 도메인(안개·반사) · `flipud=0` |
 | **EXP 3** | Epoch · Batch · Patience | **50ep · batch 8 · patience 10** | M1 16GB OOM → batch 8 · Cosine LR |
 
-> **한계:** EXP별 독립 ablation run은 일정상 미수행. Baseline↔최종 정량 비교 + 설계 근거로 대체.
+> **한계:** EXP2·3은 별도 독립 run 없이 최종 설정(`train.yaml`)에 누적 반영.
 <!-- /report:auto:hyper-tuning -->
 
-- **EXP 1: 모델 아키텍처 스케일업 (Nano vs Small)**
-  - **내용:** 온디바이스(드론) 탑재를 고려하여 가장 가벼운 Nano를 썼으나, 풍력 발전기의 미세 균열 탐지를 위해 파라미터가 조금 더 많은 Small 모델로 스케일업 실험.
-  - **결과:** 추론 속도(FPS) 저하는 미미한 반면, mAP 지표가 크게 상승하여 Small 모델로 최종 채택.
+- **EXP 1: 모델 아키텍처 스케일업 (Nano vs Small) — 독립 ablation 완료**
+  - **내용:** Baseline과 동일 조건(20ep·최소 증강)에서 **YOLO11n → YOLO11s**만 변경 (`train_exp1_small_minaug.yaml`).
+  - **결과:** EXP1 단독 mAP50 **0.498** (best ep 19) — 동일 조건 Baseline(**0.538**)보다 낮음. **Small만으로는 부족**함을 확인 → EXP2(증강)·EXP3(50ep) 통합 후 최종 **0.575** 채택.
 - **EXP 2: Data Augmentation (데이터 증강) 적용**
   - **내용:** 해상 풍력 터빈 특성(안개, 흐린 날씨, 빛 반사) 반영 — HSV 밝기/채도 변화, 좌우 Flip(`fliplr`), Mosaic·Mixup·Random Erasing 적용. 블레이드 방향 특성상 **상하 반전(flipud=0) 금지**.
   - **결과:** 과적합(Overfitting)이 방지되고 검증(Val) Loss가 안정적으로 수렴함.
@@ -172,7 +173,7 @@
 - **정책 요약:** Early stopping + 도메인 증강 + Ultralytics 기본 weight decay(L2)로 **일반화를 확보**했습니다. YOLO 객체 탐지에서는 Dropout/L1 별도 설계가 표준이 아니며, mAP 추가 이득도 제한적입니다.
 - **학습 곡선:** Val Loss가 Train Loss와 함께 안정적으로 수렴 — **심각한 과적합 징후는 관찰되지 않음** (`runs/detect/train/results.png`).
 <!-- report:auto:metrics-visuals -->
-- **자동 반영:** 2026-07-02 10:18:12
+- **자동 반영:** 2026-07-02 17:26:07
 - **Val 재검증 (`val_final`):** mAP50 **0.574** | mAP50-95 **0.318** | Precision **0.597** | Recall **0.640**
 
 ![Loss/mAP 학습 곡선 (Train)](report/assets/metrics/results.png)
@@ -185,7 +186,7 @@
 ### 오탐·미탐 및 오류 패턴 분석
 
 <!-- report:auto:error-analysis -->
-- **자동 반영:** 2026-07-02 10:18:12 (`val_final` + `predict.py`)
+- **자동 반영:** 2026-07-02 17:26:07 (`val_final` + `predict.py`)
 
 **클래스별 Val 지표**
 

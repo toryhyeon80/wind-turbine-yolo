@@ -481,10 +481,11 @@ def update_split_section(content: str, summary: dict, updated_at: str) -> str:
 def update_exp_comparison_table(
     content: str,
     baseline: RunResult | None,
+    exp1: RunResult | None,
     final: RunResult,
     train_dir: Path | None,
 ) -> str:
-    """실측 run만 표시 — Baseline vs 최종. EXP 1~3 설계는 hyper-tuning 블록."""
+    """실측 run 표시 — Baseline · EXP1(있으면) · 최종."""
     rows = [
         "| 실험 | 모델 | Epoch | mAP50 | mAP50-95 | 비고 |",
         "| :--- | :--- | ---: | ---: | ---: | :--- |",
@@ -498,6 +499,12 @@ def update_exp_comparison_table(
     else:
         rows.append("| **Baseline** | YOLO11n (Nano) | 20 | — | — | 학습 진행 중 |")
 
+    if exp1:
+        rows.append(
+            f"| **EXP 1** | {format_model_name(exp1.model)} | {exp1.best_epoch} | "
+            f"{exp1.map50:.3f} | {exp1.map50_95:.3f} | Small만 변경·20ep (`train_exp1_small_minaug.yaml`) |"
+        )
+
     rows.append(
         f"| **최종 모델** | {format_model_name(final.model)} | {final.best_epoch} | "
         f"{final.map50:.3f} | {final.map50_95:.3f} | EXP 1~3 통합 (`configs/train.yaml`) |"
@@ -507,37 +514,46 @@ def update_exp_comparison_table(
         delta = (final.map50 - baseline.map50) * 100
         rows.append(
             f"| **개선** | — | — | **+ {delta:.1f}%p** | "
-            f"+ {(final.map50_95 - baseline.map50_95) * 100:.1f}%p | Baseline 대비 |"
+            f"+ {(final.map50_95 - baseline.map50_95) * 100:.1f}%p | Baseline 대비 (최종) |"
         )
 
     body = "\n".join(rows)
     content = replace_block(content, EXP_START, EXP_END, body)
-    return update_hyper_tuning_section(content, baseline, final, train_dir)
+    return update_hyper_tuning_section(content, baseline, exp1, final, train_dir)
 
 
 def update_hyper_tuning_section(
     content: str,
     baseline: RunResult | None,
+    exp1: RunResult | None,
     final: RunResult,
     train_dir: Path | None,
 ) -> str:
     hp = load_train_hyperparameters(train_dir)
+    if exp1 and baseline:
+        exp1_note = (
+            f"EXP1 단독(20ep·min aug) mAP50 **{exp1.map50:.3f}** — "
+            f"Small만으로는 Baseline(**{baseline.map50:.3f}**) 미달 → EXP2·3 필요 |"
+        )
+    elif baseline:
+        exp1_note = (
+            f"Baseline {baseline.map50:.3f} → 최종 {final.map50:.3f} "
+            f"(+{(final.map50 - baseline.map50) * 100:.1f}%p) |"
+        )
+    else:
+        exp1_note = "미세 Damage 탐지 위해 Small 채택 |"
+
     lines = [
-        "**EXP 1~3은 누적 설계 단계** — 아래는 실측 비교(Baseline vs 최종)와 함께 기록한 결정 근거입니다.",
+        "**EXP 1~3은 누적 설계 단계** — EXP1은 독립 ablation 완료, EXP2·3은 최종 모델에 통합 반영.",
         "",
         "| 단계 | 변경 | 선택 | 근거 |",
         "| :--- | :--- | :--- | :--- |",
-        "| **EXP 1** | 모델 크기 | Nano → **Small** | "
-        + (
-            f"Baseline mAP50 {baseline.map50:.3f} → 최종 {final.map50:.3f} (+{(final.map50 - baseline.map50) * 100:.1f}%p) |"
-            if baseline
-            else "미세 Damage 탐지 위해 Small 채택 |"
-        ),
+        f"| **EXP 1** | 모델 크기 | Nano → **Small** | {exp1_note}",
         "| **EXP 2** | Data Augmentation | HSV·Mosaic·Mixup·Erasing | 도메인(안개·반사) · `flipud=0` |",
         f"| **EXP 3** | Epoch · Batch · Patience | **{hp['epochs']}ep · batch {hp['batch']} · patience {hp['patience']}** | "
         "M1 16GB OOM → batch 8 · Cosine LR |",
         "",
-        "> **한계:** EXP별 독립 ablation run은 일정상 미수행. Baseline↔최종 정량 비교 + 설계 근거로 대체.",
+        "> **한계:** EXP2·3은 별도 독립 run 없이 최종 설정(`train.yaml`)에 누적 반영.",
     ]
     return replace_block(content, HYPER_TUNING_START, HYPER_TUNING_END, "\n".join(lines))
 
@@ -802,6 +818,7 @@ def apply_report_updates(
     content: str,
     final: RunResult | None,
     baseline: RunResult | None,
+    exp1: RunResult | None,
     train_dir: Path | None,
     val_dir: Path | None,
     eda_dir: Path | None = None,
@@ -833,7 +850,7 @@ def apply_report_updates(
 
     updated = update_baseline_row(updated, baseline)
     updated = update_final_model_row(updated, final, baseline)
-    updated = update_exp_comparison_table(updated, baseline, final, train_dir)
+    updated = update_exp_comparison_table(updated, baseline, exp1, final, train_dir)
     updated = update_run_summary(updated, final, val_dir)
     if eda_dir and eda_dir.exists():
         updated = update_eda_section(updated, eda_dir, final.updated_at)
@@ -863,11 +880,13 @@ def main() -> None:
     train_dir = runs_dir / "train"
     val_dir = find_val_run_dir(runs_dir)
     baseline_dir = runs_dir / "baseline"
+    exp1_dir = runs_dir / "exp1_small_minaug"
     updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     split_summary = load_split_summary(ROOT / DEFAULT_SPLIT_SUMMARY, data_dir)
     final = try_collect_run_result(train_dir, note="본학습 best")
     baseline = try_collect_run_result(baseline_dir, note="Baseline Nano 학습")
+    exp1 = try_collect_run_result(exp1_dir, note="EXP1 Small·min aug")
     eda_dir = DEFAULT_EDA_DIR if DEFAULT_EDA_DIR.exists() else None
     predict_run_dir = find_predict_run_dir()
 
@@ -876,6 +895,7 @@ def main() -> None:
         original,
         final,
         baseline,
+        exp1,
         train_dir if train_dir.exists() else None,
         val_dir,
         eda_dir,
@@ -899,6 +919,9 @@ def main() -> None:
         print(f"Baseline: {baseline.run_dir} (mAP50={baseline.map50:.3f})")
     elif final:
         print("Baseline: 아직 없음 (python train.py --config configs/train_baseline.yaml --no-report)")
+
+    if exp1:
+        print(f"EXP1: {exp1.run_dir} (mAP50={exp1.map50:.3f}, best epoch {exp1.best_epoch})")
 
     if eda_dir:
         print(f"EDA: {eda_dir} (report.md 섹션 1 EDA 반영)")

@@ -90,7 +90,7 @@
   - **튜닝 항목:** 모델 크기(Nano→Small), Epoch(50), Batch(8), 증강 강도, patience
   - **정량 비교:** Baseline mAP50 **0.538** vs 최종 **0.575** (+3.7%p)
   - **문서화:** `report.md` EXP 설계 표 (`report:auto:hyper-tuning`)
-  - **한계:** EXP별 독립 ablation run 미수행 (일정상 Baseline↔최종 + 설계 근거로 대체)
+  - **한계:** EXP2·3은 독립 run 미수행 — EXP1 ablation 완료(mAP50 0.498) + Baseline↔최종 비교
   - **발표 멘트:** YAML 기반 하이퍼파라미터 설정 + Baseline 대비 정량 개선
 
 - [x] **문제에 적절한 평가 지표를 선정하였는가?**
