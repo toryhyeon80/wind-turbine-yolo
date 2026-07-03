@@ -52,9 +52,9 @@ wind-turbine-yolo/
 ├── predict.py             # Phase 1 Test — 이미지·폴더·영상 추론 + JSON
 ├── app.py                 # Phase 3 Streamlit 웹 데모 (Live Demo)
 ├── backend/               # Phase 2 FastAPI (`POST /api/v1/predict`)
-├── update_report.py       # report.md 자동 갱신
+├── update_report.py       # README.md 자동 갱신
 ├── update_notion.py       # Notion 페이지 동기화 + 이미지 업로드
-├── report.md              # 해커톤 루브릭 리포트 (자동 마커 포함)
+├── README.md              # 해커톤 루브릭 리포트 (자동 마커 포함)
 ├── PRESENTATION.md        # 15분 발표 PPT 초안 (평가항목 8가지 매핑)
 ├── TRAINING_CHECKLIST.md  # 학습 준비·추가 개발 체크리스트
 ├── report/assets/         # GitHub용 이미지 미러 (runs/ → update_report.py 복사)
@@ -92,7 +92,7 @@ pip3 install -r requirements.txt
 python3 split_data.py
 
 # 2. EDA (학습 전·후 모두 가능)
-python3 eda.py                    # runs/eda/ 생성 + report.md EDA 섹션 갱신
+python3 eda.py                    # runs/eda/ 생성 + README.md EDA 섹션 갱신
 
 # 3. 본학습
 python3 train.py                  # configs/train.yaml
@@ -173,7 +173,7 @@ python3 update_notion.py --skip-eda   # EDA 생략 시
 
 ## 4. 리포트·Notion 자동화
 
-### `report.md` 자동 갱신 마커
+### `README.md` 자동 갱신 마커
 
 | 마커 | 내용 |
 | :--- | :--- |
@@ -185,8 +185,8 @@ python3 update_notion.py --skip-eda   # EDA 생략 시
 | `report:auto:predict-inference` | predict.py Val 일괄 추론 집계·대표 이미지 |
 | `report:auto:predictions` | val.py 검증 예측 BBox 이미지 |
 
-- **`update_report.py`:** `runs/detect/` + `runs/eda/` + `runs/predict/` + 분할 통계 → `report.md` 갱신
-- **`update_notion.py`:** `report.md` → Notion 블록 변환 + **로컬 이미지 업로드** (표 셀 볼드 지원)
+- **`update_report.py`:** `runs/detect/` + `runs/eda/` + `runs/predict/` + 분할 통계 → `README.md` 갱신
+- **`update_notion.py`:** `README.md` → Notion 블록 변환 + **로컬 이미지 업로드** (표 셀 볼드 지원)
 - **`split_data.py` · `eda.py` · `predict.py`:** 완료 시 `update_report.py` 자동 호출 (`--no-report`로 생략)
 
 ### Notion 환경 설정 (필수)
@@ -252,7 +252,7 @@ NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
 **커밋 예시:**
 - `feat(ml): eda.py EDA 시각화 추가`
 - `feat(backend): YOLO11 추론 엔드포인트 구현`
-- `docs: report.md Baseline 비교 반영`
+- `docs: README.md Baseline 비교 반영`
 
 ---
 
@@ -261,7 +261,7 @@ NOTION_PAGE_ID=38fb8ed24414801e9db4c45637297082
 | 문서 | 용도 |
 | :--- | :--- |
 | `references.md` | OSS 스택 · Phase 매핑 |
-| `report.md` | 해커톤 루브릭 리포트 |
+| `README.md` | 해커톤 루브릭 리포트 |
 | `PRESENTATION.md` | 15분 발표 PPT 초안 |
 | `TRAINING_CHECKLIST.md` | 학습 준비·추가 개발 체크리스트 |
 | `DESIGN.md` | LogPick UI/UX 가이드 (Phase 3) |
